@@ -81,3 +81,13 @@ def test_environment_origin_ignored(monkeypatch):
     monkeypatch.setattr(module,'inspect_text',lambda text,key,base,timeout:seen.append((base,timeout)))
     Client(key=KEY).inspect('x')
     assert seen==[('https://llms.ink',65.0)]
+
+def test_shared_receipt_conformance():
+    from pathlib import Path
+    from llms_ink.inspect import _receipt
+    cases=json.loads((Path(__file__).parent/'fixtures/inspect-receipts-v1.json').read_text())['cases']
+    for c in cases:
+        if c['valid']:
+            assert _receipt(c['receipt'],c['digest'],c['status']), c['name']
+        else:
+            with pytest.raises(LlmsInkError): _receipt(c['receipt'],c['digest'],c['status'])

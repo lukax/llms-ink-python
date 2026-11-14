@@ -1,0 +1,922 @@
+{
+  "version": 1,
+  "description": "Receipt conformance only; not a detector accuracy evaluation.",
+  "cases": [
+    {
+      "name": "complete-no-finding",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": true
+    },
+    {
+      "name": "token-boundary",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 8192,
+        "inspectedTokens": 8192,
+        "windows": 43,
+        "enforced": false
+      },
+      "valid": true
+    },
+    {
+      "name": "complete-flagged",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "flagged",
+        "coverage": "complete",
+        "recommendation": "withhold",
+        "reason": "model_detection",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": true
+    },
+    {
+      "name": "partial-flagged",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "flagged",
+        "coverage": "partial",
+        "recommendation": "withhold",
+        "reason": "instruction_pattern",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 2,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": true
+    },
+    {
+      "name": "unknown-inference",
+      "status": 503,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "unknown",
+        "coverage": "none",
+        "recommendation": "withhold",
+        "reason": "model_failure",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 0,
+        "windows": 0,
+        "enforced": false
+      },
+      "valid": true
+    },
+    {
+      "name": "unknown-token-limit",
+      "status": 422,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "unknown",
+        "coverage": "none",
+        "recommendation": "withhold",
+        "reason": "token_limit",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 9000,
+        "inspectedTokens": 0,
+        "windows": 0,
+        "enforced": false
+      },
+      "valid": true
+    },
+    {
+      "name": "digest-mismatch",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "0000000000000000000000000000000000000000000000000000000000000000",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "unknown-model",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "future",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "unknown-policy",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "future",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "unknown-preprocessing",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "future",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "enforced-true",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": true
+      },
+      "valid": false
+    },
+    {
+      "name": "partial-clean",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "partial",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "no-coverage-clean",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "none",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "unfinished-clean",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 4,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "unknown-recommendation",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "safe",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "invalid-reason",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "safe",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "negative-count",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": -1,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "boolean-count",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": true,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "string-count",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": "5",
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "null-count",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": null,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "fraction-count",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5.1,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "over-count",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 6,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "over-token-limit",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 8193,
+        "inspectedTokens": 8193,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "no-windows",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 0,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "too-many-windows",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 44,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "fraction-windows",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1.5,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "unsafe-count",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 9007199254740992,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "complete-flagged-short",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "flagged",
+        "coverage": "complete",
+        "recommendation": "withhold",
+        "reason": "model_detection",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 2,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "unknown-with-windows",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "unknown",
+        "coverage": "none",
+        "recommendation": "withhold",
+        "reason": "model_failure",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 0,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "unknown-with-coverage",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "unknown",
+        "coverage": "partial",
+        "recommendation": "withhold",
+        "reason": "model_failure",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 0,
+        "windows": 0,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "unknown-continues",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "unknown",
+        "coverage": "none",
+        "recommendation": "continue",
+        "reason": "model_failure",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 0,
+        "windows": 0,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "clean-error-status",
+      "status": 503,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "unknown-bad-status",
+      "status": 500,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "unknown",
+        "coverage": "none",
+        "recommendation": "withhold",
+        "reason": "model_failure",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 0,
+        "windows": 0,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "missing-detection",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "missing-coverage",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "missing-recommendation",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "missing-reason",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "missing-modelRevision",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "missing-policyRevision",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "missing-preprocessingRevision",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "missing-contentDigest",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "missing-inputTokens",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inspectedTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "missing-inspectedTokens",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "windows": 1,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "missing-windows",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "missing-enforced",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 5,
+        "windows": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "wrong-root-None",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": null,
+      "valid": false
+    },
+    {
+      "name": "wrong-root-[]",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": [],
+      "valid": false
+    },
+    {
+      "name": "wrong-root-True",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": true,
+      "valid": false
+    },
+    {
+      "name": "wrong-root-no_finding",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": "no_finding",
+      "valid": false
+    }
+  ]
+}
