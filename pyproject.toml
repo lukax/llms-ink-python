@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "llms-ink"
+dynamic = ["version"]
+description = "Turn any link — site, docs section, page, GitHub repo, PDF or video — into llms.txt and llms-full.txt. Python client for llms.ink, with LangChain and LlamaIndex loaders and a stdio MCP server."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Lucas Espindola" }]
+keywords = ["llms.txt", "llms-full.txt", "llm", "ai", "markdown", "docs", "context", "rag", "langchain", "llama-index", "mcp"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Text Processing :: Markup :: Markdown",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+langchain = ["langchain-core>=0.2"]
+llama-index = ["llama-index-core>=0.10"]
+
+[project.scripts]
+llms-ink-mcp = "llms_ink.mcp:main"
+
+[project.urls]
+Homepage = "https://llms.ink"
+Documentation = "https://llms.ink/docs/"
+Source = "https://github.com/lukax/llms-ink-python"
+Changelog = "https://github.com/lukax/llms-ink-python/blob/main/CHANGELOG.md"
+
+[tool.hatch.version]
+path = "src/llms_ink/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/llms_ink"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "README.md", "LICENSE", "CHANGELOG.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not live'"
+markers = ["live: calls the real https://llms.ink (run with: pytest -m live)"]

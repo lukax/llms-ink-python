@@ -1,0 +1,27 @@
+# Publishes llms-ink to PyPI on a version tag (v0.3.0), with PyPI trusted publishing (OIDC) and attestations.
+# This folder is mirrored from the private llms.ink repo by scripts/mirror.mjs; edit it there.
+name: Publish
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Tag matches the package version
+        run: test "v$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/llms_ink/__init__.py)" = "$GITHUB_REF_NAME"
+      - run: pip install build pytest
+      - run: pip install -e '.[langchain,llama-index]'
+      - run: pytest
+      - run: python -m build
+      - uses: pypa/gh-action-pypi-publish@release/v1
