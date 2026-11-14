@@ -4,7 +4,7 @@
     >>> Client().llms("llmstxt.org").text
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 from .client import (  # noqa: E402
     DEFAULT_BASE_URL,
@@ -22,6 +22,7 @@ from .client import (  # noqa: E402
     Segment,
     Transcript,
 )
+from .inspect import InspectionReceipt  # noqa: E402
 from .errors import InvalidKey, LlmsInkError, QuotaExceeded, RateLimited  # noqa: E402
 
 __all__ = [
@@ -33,6 +34,7 @@ __all__ = [
     "CheckSummary",
     "Client",
     "InvalidKey",
+    "InspectionReceipt",
     "LlmsInkError",
     "Media",
     "Parsed",

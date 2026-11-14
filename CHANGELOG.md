@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0 — 2026-11-14
+
+- Explicit hosted `inspect(text)` with immutable, digest-bound receipts and pilot revision validation.
+- Flagged and incomplete scans remain `withhold`; malformed receipts fail closed.
+- Required key, encoded request/response limits, redirect refusal and no automatic retries.
+- No changes to default retrieval, loaders or local guard behavior.
+
 ## 0.4.0 — 2026-11-14
 
 - Experimental local MCP result guard: optional `[guard]` dependencies, pinned model setup/status, text scanning and a bounded stdio wrapper.

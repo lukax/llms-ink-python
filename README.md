@@ -183,3 +183,27 @@ python3 -m venv .venv && .venv/bin/pip install -e '.[langchain,llama-index]' pyt
 `LLMS_INK_API` points the client at another API base URL.
 
 MIT licensed.
+
+## Hosted Inspect (experimental, 0.5.0)
+
+```python
+# Requires llms-ink >=0.5.0; no guard/model download needed.
+import os
+from llms_ink import Client
+
+ink = Client(key=os.environ['LLMS_INK_INSPECT_KEY'])
+receipt = ink.inspect('Install the package and read the documentation.')
+if receipt.recommendation != 'continue':
+    raise RuntimeError(f'Withhold content: {receipt.detection}')
+print(receipt.content_digest)
+```
+
+Requires an inspection-enabled pilot key. This call uploads only the supplied text to llms.ink; existing retrieval calls, loaders, plugins and the local guard do not opt in automatically. Keep the key server-side.
+
+The client checks the exact UTF-8 SHA-256 digest, model/policy/preprocessing revisions, coverage and token counts before returning an immutable receipt. A flagged result can use HTTP 200; incomplete 422/503 receipts return `unknown`. HTTP problems and invalid receipts raise an error. Withhold on either `withhold` or any exception. `no_finding` is not a safety guarantee, and receipts are unsigned.
+
+Requests are limited to 128 KiB after JSON encoding and responses to 16 KiB. There are no automatic retries: admitted attempts consume pilot allowance even when incomplete. Redirects are refused. Inspection ignores `LLMS_INK_API`; an explicit client base URL may select an HTTPS endpoint or localhost for development. The key follows that explicitly configured endpoint.
+
+For JSON, serialize it yourself and pass the resulting string to `inspect()`. The SDK sends `format: "text"`, so its digest covers those exact bytes; it does not promise cross-language JSON canonicalization. See [pilot limits and privacy](https://llms.ink/inspect/).
+
+Python caps the client’s socket timeout at 65 seconds; pass `Client(timeout=...)` for a shorter timeout.

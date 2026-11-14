@@ -232,6 +232,9 @@ class CheckResult:
         )
 
 
+from .inspect import InspectionReceipt
+
+
 class Client:
     """A client for https://llms.ink.
 
@@ -250,6 +253,7 @@ class Client:
     ) -> None:
         key = key if key is not None else os.environ.get("LLMS_INK_KEY")
         self.key = key.strip() if key and key.strip() else None
+        self._inspect_base_url = (base_url or DEFAULT_BASE_URL).rstrip("/")
         self.base_url = (base_url or os.environ.get("LLMS_INK_API") or DEFAULT_BASE_URL).rstrip("/")
         self.timeout = timeout
 
@@ -265,6 +269,17 @@ class Client:
         if fresh:
             params["fresh"] = "1"
         return Result.from_json(self._get("/api/v0/llms", params))
+
+    def inspect(self, text: str) -> "InspectionReceipt":
+        """Upload exact text to the hosted Inspect pilot (enabled key required).
+
+        No automatic retries. Socket operations time out after at most 65 seconds. LLMS_INK_API is
+        ignored for inspection; use explicit base_url for a development server.
+        HTTP problems and invalid receipts raise LlmsInkError; no finding is not
+        a safety guarantee. Existing loaders never upload content for inspection.
+        """
+        from .inspect import inspect_text
+        return inspect_text(text, self.key, self._inspect_base_url, min(self.timeout, 65.0))
 
     def check(self, url: str) -> CheckResult:
         """Checks a site's published llms.txt against the format and that its links answer."""
