@@ -285,3 +285,26 @@ Requests are limited to 128 KiB after JSON encoding and responses to 16 KiB. The
 For JSON, serialize it yourself and pass the resulting string to `inspect()`. The SDK sends `format: "text"`, so its digest covers those exact bytes; it does not promise cross-language JSON canonicalization. See [pilot limits and privacy](https://llms.ink/inspect/).
 
 Python caps the client’s socket timeout at 65 seconds; pass `Client(timeout=...)` for a shorter timeout.
+
+## Several servers in one connection (experimental, 0.8.0)
+
+On macOS/Linux with Python 3.11+, `gateway` puts up to eight legacy stdio servers behind one local model runtime and approval queue:
+
+```sh
+llms-ink-guard gateway-check /absolute/path/to/gateway.json
+llms-ink-guard gateway --config /absolute/path/to/gateway.json
+```
+
+The configuration contains `version: 1` and a `servers` object. Each server has an absolute executable/argv in `command`, plus a `tools` array. Each entry contains its complete reviewed tool object in `definition` and a list of exact permitted argument objects in `arguments`. Copy actual tool definitions through your trusted setup process; illustrative definitions will not match unrelated servers. [Configuration example and host setup](https://llms.ink/guard/gateway/).
+
+A configured `docs` server's `read_document` tool becomes `docs__read_document`. Names cannot collide across servers. All configured definitions must match before any tool list is exposed; unknown tools stay hidden. The file is bounded to 256 KiB, eight servers, 128 tools and 1,024 exact argument objects. The combined discovery response must also fit the existing inspection limits. `gateway-check` validates configuration only; it does not start or certify the servers.
+
+Every permitted call requires a fresh form approval on MCP 2025-06-18 or 2025-11-25. There is no automatic-approval option in this command. Review shows the server-prefixed name, full arguments, the actual upstream command and bound fingerprints. One approval may be pending across all configured servers. Declining it, cancelling it, disconnecting, or replaying another connection's answer cannot dispatch the held action. Approval still trusts the host's answer; it does not attest a human was present.
+
+The aggregate is tied to one stdio connection. Use a separate connection per host session; grouping by working directory or a model-supplied session string is not supported. A host that shares one connection across chats also shares this queue. This is not the proposed authenticated shared service, a cross-chat identity system, or persistent exposure tracking.
+
+The gateway requires every server to select the same supported legacy protocol version. It permits one complete discovery at a time, internally follows at most 16 pages per server and refuses duplicate/missing/changed reviewed definitions. A tool-list-change notification or any server disconnect stops the aggregate and revokes held approvals. Reconnect after reviewing the configuration. Unknown result paths, reverse requests, resources, prompts, tasks, HTTP transports and newer protocol revisions are not added by this release.
+
+Termination stops the owned POSIX process group. During the bounded model-startup handshake, a termination signal is deferred until the worker can be closed; no server is started after a pending stop. Cancellation after dispatch cannot undo a side effect. A server can act during startup or escape a process group; this is not a process/network sandbox or a pin of executable bytes. Native host tools and other connections remain outside the boundary.
+
+The tests use real subprocess journals, including a detector-missed source from server A that proposes an unapproved action through server B. This is containment/compatibility evidence, not an independent task-success or attack-prevention estimate. The published [task checks](https://llms.ink/guard/tasks/) and [detector limitations](https://llms.ink/inspect/evaluation/) still apply.

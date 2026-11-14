@@ -194,3 +194,12 @@ def test_review_bound_includes_the_visible_summary_and_fingerprints():
     message['params']['arguments']['text']='x'*4000
     with pytest.raises(ValueError,match='too large'):
         Approval.create(message,['/server'],'a'*64,'b'*64,0,60)
+
+
+def test_top_level_response_extensions_cannot_bypass_result_inspection():
+    proxy,child,out,_=rig();prompt=call(proxy,child,out);answer=accept(prompt)
+    send(proxy,child,out,answer);out.seek(0);out.truncate()
+    proxy._server(json.dumps({'jsonrpc':'2.0','id':1,'result':{'content':[{'type':'text','text':'ordinary documentation'}]},'_meta':{'payload':'PAYLOAD_SENTINEL'}}).encode(),child,out)
+    delivered=json.loads(out.getvalue())
+    assert set(delivered)=={'jsonrpc','id','result'}
+    assert 'PAYLOAD_SENTINEL' not in out.getvalue().decode()

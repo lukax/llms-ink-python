@@ -224,6 +224,10 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("tool-hash", help="Hash one reviewed tools/list tool object from stdin; no model or server needed.")
     check = commands.add_parser("policy-check", help="Validate a local permission file; no model or server needed.")
     check.add_argument("path")
+    gateway_check = commands.add_parser("gateway-check", help="Validate a reviewed multi-server configuration without starting a model or server.")
+    gateway_check.add_argument("path")
+    gateway = commands.add_parser("gateway", help="Guard several legacy stdio servers with exact permissions and one-use host approvals (POSIX, experimental).")
+    gateway.add_argument("--config", required=True, help="Owner-controlled JSON server definitions and exact arguments.")
     wrap = commands.add_parser("wrap", help="Guard a legacy stdio MCP tool server.")
     wrap.add_argument("--policy", help="Owner-controlled JSON permissions. Deny calls without an exact matching rule.")
     wrap.add_argument("--require-approval", action="store_true", help="Require a one-use host form approval for each policy-permitted call (experimental).")
@@ -231,7 +235,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if sys.version_info < (3, 11):
         parser.error("The optional guard requires Python 3.11 or newer.")
+    old_signals = {}
+    startup = [True, False]
     try:
+        if args.action == "gateway-check":
+            from .guard_gateway_config import GatewayConfig
+            config = GatewayConfig.load(args.path)
+            print(json.dumps({"valid": True, "version": 1, "servers": len(config.servers), "tools": len(config.tools()), "sha256": config.sha256}))
+            return 0
         if args.action == "policy-check":
             from .guard_policy import Policy
             policy = Policy.load(args.path)
@@ -256,6 +267,22 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"installed": True, "modelRevision": MODEL_REVISION, "license": "Llama 4 Community License"}))
             return 0
         policy = None
+        config = None
+        if args.action == "gateway":
+            if os.name != "posix":
+                raise RuntimeError("The experimental aggregate gateway requires POSIX process-group cleanup.")
+            from .guard_gateway_config import GatewayConfig
+            config = GatewayConfig.load(args.config)
+            command = config.command(args.config)
+            policy = config.outer_policy(command)
+            import signal
+            def gateway_stop(_signal, _frame):
+                if startup[0]:
+                    startup[1] = True  # Let bounded model startup finish so its worker can be closed.
+                else:
+                    raise KeyboardInterrupt
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                old_signals[sig] = signal.signal(sig, gateway_stop)
         if args.action == "wrap":
             command = args.command[1:] if args.command[:1] == ["--"] else args.command
             if not command:
@@ -268,6 +295,8 @@ def main(argv: list[str] | None = None) -> int:
                 policy.check_command(command)
         guard = LocalGuard()
         try:
+            startup[0] = False
+            if startup[1]: raise KeyboardInterrupt
             if args.action == "scan":
                 raw = sys.stdin.buffer.read(MAX_BYTES + 1)
                 if len(raw) > MAX_BYTES:
@@ -277,8 +306,12 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(result))
                 return {"allow": 0, "quarantine": 1, "unscanned": 2}[result["outcome"]]
             from .guard_proxy import Proxy
+            if config is not None:
+                return Proxy(command, guard, policy=policy, require_approval=True,
+                             review_commands=config.review_commands(), process_group=True).run(sys.stdin.buffer, sys.stdout.buffer)
             return Proxy(command, guard, policy=policy, require_approval=args.require_approval).run(sys.stdin.buffer, sys.stdout.buffer)
         finally:
+            startup[0] = True
             guard.close()
     except KeyboardInterrupt:
         return 130
@@ -287,6 +320,9 @@ def main(argv: list[str] | None = None) -> int:
         message = str(error) if type(error) is RuntimeError else "Guard failed; no uninspected response was released. Check installation and retry."
         print(f"llms-ink-guard: {message}", file=sys.stderr)
         return 2
+    finally:
+        for sig, handler in old_signals.items():
+            signal.signal(sig, handler)
 
 
 if __name__ == "__main__":

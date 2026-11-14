@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0 — 2026-11-14
+
+- Experimental POSIX `gateway --config FILE`: aggregate up to eight reviewed legacy stdio servers behind one local inspection runtime, exact permissions and mandatory one-use host approval. Tool names are prefixed with the configured server identity.
+- Pin complete upstream definitions, command arguments and exact calls in an owner-controlled configuration. Validate the frozen configuration again before starting servers; support bounded upstream pagination without exposing partial discovery.
+- Share one pending approval across the aggregate connection. Server disconnects, declared tool-list changes, changed reviewed definitions, misrouted replies and transport failures stop the connection. Host-supplied session metadata cannot grant authority.
+- Stop owned POSIX process groups on gateway shutdown. Bound stalled writes and initialization; make POSIX transport readers stoppable so a closed server does not leave an input thread blocking interpreter exit.
+- Drop arbitrary top-level JSON-RPC response extensions from the existing wrapper; only the inspected result/error body is delivered.
+- This is one aggregate connection, not an authenticated shared service or a claim of conversation-wide coverage. Native tools, remote HTTP servers, Windows gateway support, modern MCP and executable sandboxing remain outside scope. The detector and hosted receipt contract are unchanged.
+
 ## 0.7.0 — 2026-11-14
 
 - Experimental `wrap --policy FILE --require-approval`: request one-use host form approval before each exact policy-permitted call. No approval can broaden the policy.

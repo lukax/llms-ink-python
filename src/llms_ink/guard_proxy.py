@@ -8,15 +8,19 @@ an alternate uninspected content path. Unsupported protocol features fail closed
 from __future__ import annotations
 
 import json
+import os
 import queue
 import re
 import subprocess
+import signal
 import sys
 import threading
 import time
 from typing import Any, BinaryIO
+from types import MappingProxyType
 
 from .guard import MAX_BYTES, receipt
+from .guard_transport import lines
 from .guard_policy import Policy, decode, tool_digest
 from .guard_approval import Approval, APPROVAL_SECONDS, APPROVAL_VERSIONS, accepted, supports_approval
 
@@ -104,9 +108,13 @@ def supported_result(method: str, body: Any) -> bool:
 
 
 class Proxy:
-    def __init__(self, command: list[str], guard: Any, *, policy: Policy | None = None, require_approval: bool = False, approval_timeout: float = APPROVAL_SECONDS, request_timeout: float = 120, log: Any = None):
+    def __init__(self, command: list[str], guard: Any, *, policy: Policy | None = None, require_approval: bool = False, approval_timeout: float = APPROVAL_SECONDS, request_timeout: float = 120, log: Any = None, review_commands: dict | None = None, process_group: bool = False):
         self.command, self.guard = list(command), guard
         self.policy = policy
+        if process_group and os.name != 'posix':
+            raise RuntimeError('Aggregate gateway process cleanup requires POSIX.')
+        self.process_group = process_group
+        self.review_commands = MappingProxyType({name: tuple(command) for name, command in (review_commands or {}).items()})
         if require_approval and policy is None:
             raise RuntimeError("Host approval requires an owner-controlled exact tool policy.")
         if not 0 < approval_timeout <= APPROVAL_SECONDS:
@@ -133,16 +141,7 @@ class Proxy:
 
     def _reader(self, stream: BinaryIO, source: str) -> None:
         try:
-            while not self.stop.is_set():
-                raw = stream.readline(MAX_BYTES + 1)
-                if not raw:
-                    if source == "client":
-                        self.client_disconnected.set()
-                    self._event((source, None))
-                    return
-                if len(raw) > MAX_BYTES:
-                    self._event(("fatal", "message_too_large"))
-                    return
+            for raw in lines(stream, self.stop, MAX_BYTES):
                 if raw.strip():
                     if source == "client":
                         try:
@@ -154,6 +153,9 @@ class Proxy:
                         except (ValueError, TypeError, AttributeError, RecursionError):
                             pass
                     self._event((source, raw))
+            if not self.stop.is_set():
+                if source == "client": self.client_disconnected.set()
+                self._event((source, None))
         except (OSError, ValueError):
             self._event(("fatal", "transport_failure"))
 
@@ -241,7 +243,7 @@ class Proxy:
                         self._write(output, error(id, "Another call is awaiting approval. Retry after it finishes."))
                         return
                     try:
-                        approval, prompt = Approval.create(msg, self.command, self.policy.sha256,
+                        approval, prompt = Approval.create(msg, list(self.review_commands.get(name, self.command)), self.policy.sha256,
                                                            self.tools[name], time.monotonic(), self.approval_timeout)
                     except ValueError:
                         self._write(output, error(id, "This call is too large for complete approval review. No call was sent."))
@@ -315,6 +317,10 @@ class Proxy:
         method, id = request["method"], request["id"]
         if ("result" in msg) == ("error" in msg):
             raise ValueError("Invalid response")
+        # JSON-RPC response extensions are not part of the inspected result.
+        # Do not let untrusted top-level fields form a second delivery path.
+        field = "result" if "result" in msg else "error"
+        msg = {"jsonrpc": "2.0", "id": id, field: msg[field]}
         body = msg.get("result", msg.get("error"))
         if not supported_result(method if "result" in msg else "error", body):
             result = receipt("unscanned", "unsupported_content", coverage="none")
@@ -384,9 +390,11 @@ class Proxy:
             self.log({"event": "tool_policy_loaded", "version": 1, "sha256": self.policy.sha256})
         # A subprocess's stderr may be surfaced by a host. Suppress it rather than
         # accidentally creating an uninspected output path.
-        child = subprocess.Popen(self.command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        child = subprocess.Popen(self.command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=self.process_group)
+        readers = []
         for stream, source in ((stdin, "client"), (child.stdout, "server")):
-            threading.Thread(target=self._reader, args=(stream, source), daemon=True).start()
+            reader = threading.Thread(target=self._reader, args=(stream, source), daemon=True)
+            readers.append(reader); reader.start()
         try:
             while True:
                 if self.client_disconnected.is_set():
@@ -425,11 +433,34 @@ class Proxy:
         finally:
             self.awaiting.clear()
             self.stop.set()
-            child.terminate()
+            for reader in readers: reader.join(timeout=.3)
+            if self.process_group:
+                # Reap an already-exited leader before signalling its group.
+                # macOS can reject a group containing only an unreaped zombie.
+                child.poll()
+                try:
+                    os.killpg(child.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+            else:
+                child.terminate()
             try:
                 child.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                child.kill()
+                if self.process_group:
+                    try:
+                        os.killpg(child.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                else:
+                    child.kill()
                 child.wait()
+            if self.process_group:
+                # A server can outlive its immediate parent. Reap this owned
+                # process group even if the multiplexer already exited.
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
             child.stdin.close()
             child.stdout.close()
