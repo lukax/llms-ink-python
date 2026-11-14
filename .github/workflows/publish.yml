@@ -7,7 +7,23 @@ on:
     tags: ['v*.*.*']
 
 jobs:
+  guard:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.13']
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e '.[guard]' pytest
+      - run: llms-ink-guard setup
+      - run: pytest tests/test_guard.py
+        env:
+          LLMS_INK_GUARD_MODEL_TEST: '1'
   publish:
+    needs: guard
     runs-on: ubuntu-latest
     environment: pypi
     permissions:

@@ -172,7 +172,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         epilog="Uses LLMS_INK_KEY as the API key when set (optional); a rejected key fails, never falls back to anonymous.",
     )
     parser.add_argument("--version", action="version", version=f"llms-ink {__version__}")
-    parser.parse_args(argv)
+    parser.add_argument("--guard", action="store_true", help="Inspect responses locally with the optional guard (setup required).")
+    args = parser.parse_args(argv)
+    if args.guard:
+        from .guard import main as guard_main
+        return guard_main(["wrap", "--", sys.executable, "-m", "llms_ink", "mcp"])
     try:
         Bridge().serve(sys.stdin.buffer, sys.stdout.buffer)
     except KeyboardInterrupt:

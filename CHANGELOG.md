@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0 — 2026-11-14
+
+- Experimental local MCP result guard: optional `[guard]` dependencies, pinned model setup/status, text scanning and a bounded stdio wrapper.
+- `llms-ink-mcp --guard` inspects llms.ink responses before delivery; the default bridge remains unchanged.
+- Cancellation, structured payloads, discovery changes and model/transport failure checks; explicit text-only and protocol limits.
+- Built with Llama. Model weights are separately licensed and downloaded only by `setup`.
+
 ## 0.3.0 — 2026-11-14
 
 - `Client.check_text(text, base=None, links=False)`: parses and checks llms.txt text (`POST /api/v0/check`).

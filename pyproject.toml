@@ -25,11 +25,13 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
+guard = ["onnxruntime>=1.20,<2", "tokenizers>=0.21,<1", "numpy>=1.26,<3"]
 langchain = ["langchain-core>=0.2"]
 llama-index = ["llama-index-core>=0.10"]
 
 [project.scripts]
 llms-ink-mcp = "llms_ink.mcp:main"
+llms-ink-guard = "llms_ink.guard:main"
 
 [project.urls]
 Homepage = "https://llms.ink"

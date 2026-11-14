@@ -133,6 +133,45 @@ Other clients use the same command in their `mcpServers` config. A rejected key 
 API's message; it never falls back to anonymous. Clients that speak Streamable HTTP can connect to
 https://llms.ink/mcp directly.
 
+## Local MCP guard (experimental)
+
+Python 3.11 or newer. Install the optional runtime and explicitly download the pinned model:
+
+```sh
+pip install 'llms-ink[guard]==0.4.0'
+llms-ink-guard setup
+llms-ink-guard status
+```
+
+Configure your MCP client to launch `llms-ink-mcp --guard` using the environment's absolute executable path.
+To wrap another legacy stdio tool server:
+
+```sh
+llms-ink-guard wrap -- server-command arguments
+```
+
+The local Llama-Doorman-22M classifier inspects tool definitions, text, structured JSON and errors before delivery.
+Flagged responses are withheld without repeating the payload. Model errors, incomplete inspection and unsupported
+content never fall back to uninspected delivery. Tools must be discovered before use. A changed definition locks
+further calls on that connection; review the server before reconnecting. Other connections and host tools are not covered.
+
+Limits: 1 MiB per message, 8,192 model tokens per response, 20 seconds per inspection, 16 pending requests,
+120 seconds per request, 512 discovered tools and 4,096 unique request IDs per connection. Restart to renew a
+connection. Legacy tool discovery/calls only: no batches, resources, prompts, sampling, elicitation, images, audio
+or embedded/resource-link content. Server stderr and unsolicited notifications are suppressed. Decision events
+on stderr contain no response payload. This is not a sandbox or an outgoing-action authorization layer.
+
+`llms-ink-guard scan < document.txt` prints an inspection receipt: exit 0 allows, 1 quarantines, 2 means unscanned
+or unavailable. An allow decision is not proof of safety. The model is English-centric; this pilot has not met
+large held-out-corpus or agent-task evaluation gates. Reproducible authored smoke cases live in
+`tests/fixtures/guard_eval.json`; after setup, run `python tests/evaluate_guard.py` to compare rules and hybrid outcomes.
+
+The first setup downloads about 96 MB. Files are verified against pinned SHA-256 hashes at install and startup.
+No scanning API receives content; upstream MCP servers still receive requests. Override the local cache location
+with `LLMS_INK_GUARD_CACHE` if needed. This is an independent integration of Pinata's model, not its Doorman app.
+Built with Llama. Weights are separately licensed under the Llama 4 Community License; setup downloads and preserves
+`LICENSE` and `NOTICE`. See the [setup guide](https://llms.ink/guard/).
+
 ## Development
 
 ```sh
