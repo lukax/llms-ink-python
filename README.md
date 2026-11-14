@@ -157,7 +157,7 @@ further calls on that connection; review the server before reconnecting. Other c
 
 Limits: 1 MiB per message, 8,192 model tokens per response, 20 seconds per inspection, 16 pending requests,
 120 seconds per request, 512 discovered tools and 4,096 unique request IDs per connection. Restart to renew a
-connection. Legacy tool discovery/calls only: no batches, resources, prompts, sampling, elicitation, images, audio
+connection. Legacy tool discovery/calls only: no batches, resources, prompts, sampling, upstream elicitation, images, audio
 or embedded/resource-link content. Server stderr and unsolicited notifications are suppressed. Decision events
 on stderr contain no response payload. Plain response scanning does not authorize outgoing actions. Neither
 mode sandboxes the server or covers other connections and native host tools.
@@ -208,8 +208,9 @@ llms-ink-guard wrap --policy /absolute/path/to/policy.json -- /opt/mcp/docs-serv
 
 The policy is validated before the model/server starts, then held as an immutable snapshot. The executable
 path must be absolute and its argument list must match. Discovery exposes only approved definitions; changed
-or unapproved definitions cannot be called. Missing rules, changed arguments, extra call metadata and task
-extensions are denied. Denial events contain no tool names or arguments. Edit the policy and restart after
+or unapproved definitions cannot be called. Missing rules, changed arguments, unknown call metadata and task
+extensions are denied. Validated MCP `progressToken` and Claude Code `claudecode/toolUseId` correlation metadata
+are discarded before dispatch; neither reaches the upstream or grants permission. Denial events contain no tool names or arguments. Edit the policy and restart after
 owner review; there is no agent approval tool or live reload. An empty `tools` object denies all tool calls.
 
 Version 1 supports exact JSON objects only: key order is ignored, but string values and numeric types must
@@ -222,6 +223,32 @@ The command and advertised definition are checked, not executable bytes, environ
 directory or remote behavior. A server can act as soon as it starts; use trusted code and limited credentials.
 Permitted calls can have side effects. `llms-ink-mcp --guard` and plain `wrap` remain response-only modes.
 See the [permission guide](https://llms.ink/guard/policy/) for a complete example and the enforcement scope.
+
+## One-use host approval (experimental, 0.7.0)
+
+```sh
+llms-ink-guard wrap --policy /absolute/path/to/policy.json --require-approval -- /opt/mcp/docs-server
+```
+
+This adds a host form before **each already permitted call**. It cannot approve a tool or arguments absent
+from the exact policy. The host must declare form elicitation on MCP 2025-06-18 or 2025-11-25; unsupported
+clients fail initialization. Other upstream requests for input are still refused.
+
+The form shows the tool, exact JSON arguments, command and definition/policy fingerprints. The confirmation
+checkbox defaults to false. Only `accept` with `approve: true` dispatches the stored call once. Decline,
+cancel, malformed replies, 60-second expiry, disconnect or a changed definition cannot release it. Replayed
+replies cannot approve another call or connection. Only one form can wait per connection; competing calls
+receive a busy error. Reviews over 8 KiB are refused whole, never truncated by the guard. The upstream result
+still goes through content inspection after dispatch. Cancellation after dispatch cannot undo a side effect.
+
+**Trust the host, not a claim of human presence.** MCP does not attest that a person answered. Use a host
+that displays the complete request, keeps approval responses outside agent tool access, and does not
+install auto-accept elicitation hooks. Some hosts collapse long messages; inspect the complete tool call
+in the host's detailed view and decline if you cannot see every argument. No global approval or policy
+change follows from accepting a form. Logs omit tool names, arguments and approval identifiers.
+
+This is a single-connection host integration, not the proposed shared guard service or cross-server session
+boundary. Its transport tests do not establish independent task success or improved detection accuracy.
 
 ## Development
 

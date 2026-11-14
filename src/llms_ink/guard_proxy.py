@@ -18,6 +18,7 @@ from typing import Any, BinaryIO
 
 from .guard import MAX_BYTES, receipt
 from .guard_policy import Policy, decode, tool_digest
+from .guard_approval import Approval, APPROVAL_SECONDS, APPROVAL_VERSIONS, accepted, supports_approval
 
 VERSIONS = {"2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"}
 NAME = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
@@ -38,6 +39,30 @@ def id_key(value: Any) -> tuple:
     if type(value) is int and abs(value) <= 2**53 - 1:
         return (int, value)
     raise ValueError("Invalid request id")
+
+
+def transport_metadata_only(params: dict) -> bool:
+    """Recognize and discard correlation metadata, never forward it upstream.
+
+    progressToken is MCP transport metadata. Claude Code 2.1.280 also sends
+    claudecode/toolUseId. Neither can change the exact tool name or arguments.
+    Unknown extensions remain denied rather than acquiring execution semantics.
+    """
+    if "_meta" not in params:
+        return True
+    meta = params["_meta"]
+    if type(meta) is not dict or set(meta) - {"progressToken", "claudecode/toolUseId"}:
+        return False
+    if "progressToken" in meta:
+        try:
+            id_key(meta["progressToken"])
+        except ValueError:
+            return False
+    if "claudecode/toolUseId" in meta:
+        value = meta["claudecode/toolUseId"]
+        if type(value) is not str or not 1 <= len(value) <= 128:
+            return False
+    return True
 
 
 def error(id: Any, message: str, code: int = -32001) -> dict:
@@ -79,9 +104,17 @@ def supported_result(method: str, body: Any) -> bool:
 
 
 class Proxy:
-    def __init__(self, command: list[str], guard: Any, *, policy: Policy | None = None, request_timeout: float = 120, log: Any = None):
+    def __init__(self, command: list[str], guard: Any, *, policy: Policy | None = None, require_approval: bool = False, approval_timeout: float = APPROVAL_SECONDS, request_timeout: float = 120, log: Any = None):
         self.command, self.guard = list(command), guard
         self.policy = policy
+        if require_approval and policy is None:
+            raise RuntimeError("Host approval requires an owner-controlled exact tool policy.")
+        if not 0 < approval_timeout <= APPROVAL_SECONDS:
+            raise ValueError("Invalid approval timeout")
+        self.require_approval = require_approval
+        self.approval_timeout = approval_timeout
+        self.awaiting: dict[tuple, Approval] = {}
+        self.client_disconnected = threading.Event()
         if policy is not None:
             policy.check_command(self.command)
         self.request_timeout = request_timeout
@@ -103,6 +136,8 @@ class Proxy:
             while not self.stop.is_set():
                 raw = stream.readline(MAX_BYTES + 1)
                 if not raw:
+                    if source == "client":
+                        self.client_disconnected.set()
                     self._event((source, None))
                     return
                 if len(raw) > MAX_BYTES:
@@ -137,6 +172,9 @@ class Proxy:
 
     def _client(self, raw: bytes, child: Any, output: BinaryIO) -> None:
         msg = parse(raw)
+        if "method" not in msg and self.require_approval:
+            self._approval_response(msg, child, output)
+            return
         method = msg.get("method")
         if not isinstance(method, str):
             raise ValueError("Client responses are not supported")
@@ -146,10 +184,15 @@ class Proxy:
         if "id" not in msg:
             if method == "notifications/cancelled":
                 key = id_key(params.get("requestId"))
+                held = next((a for a in self.awaiting.values() if id_key(a.call_id) == key), None)
+                if held is not None:
+                    self.awaiting.pop(id_key(held.id))
+                    self._cancel_form(held, output)
                 self.pending.pop(key, None)
                 with self.state_lock:
                     self.cancelled.discard(key)
-                self._write(child.stdin, msg)
+                if held is None:
+                    self._write(child.stdin, msg)
             elif method == "notifications/initialized" and self.initialized:
                 self._write(child.stdin, msg)
             return
@@ -161,12 +204,15 @@ class Proxy:
         with self.state_lock:
             if key in self.cancelled:
                 return
-        if len(self.pending) >= MAX_PENDING:
+        if len(self.pending) + len(self.awaiting) >= MAX_PENDING:
             self._write(output, error(id, "Local guard is busy. Retry after pending requests finish."))
             return
         if method == "initialize":
             if self.initialized or self.initializing or params.get("protocolVersion") not in VERSIONS:
                 self._write(output, error(id, "Guard supports one legacy MCP initialization per connection.", -32602))
+                return
+            if self.require_approval and not supports_approval(params):
+                self._write(output, error(id, "Host approval requires form elicitation on MCP 2025-06-18 or 2025-11-25.", -32602))
                 return
             self.initializing = True
             msg = {**msg, "params": {**params, "capabilities": {}}}
@@ -183,17 +229,75 @@ class Proxy:
                 # Unknown metadata/extensions could change execution semantics.
                 # Do not forward them, even alongside an otherwise allowed call.
                 if (set(msg) != {"jsonrpc", "id", "method", "params"}
-                        or set(params) - {"name", "arguments"} or type(arguments) is not dict
+                        or set(params) - {"name", "arguments", "_meta"} or not transport_metadata_only(params)
+                        or type(arguments) is not dict
                         or not self.policy.allows(name, self.tools[name], arguments)):
                     self.log({"outcome": "denied", "reason": "tool_policy"})
                     self._write(output, error(id, "Local policy denied this tool call. Ask the policy owner to review the required action."))
                     return
                 msg = {**msg, "params": {"name": name, "arguments": arguments}}
+                if self.require_approval:
+                    if self.awaiting:
+                        self._write(output, error(id, "Another call is awaiting approval. Retry after it finishes."))
+                        return
+                    try:
+                        approval, prompt = Approval.create(msg, self.command, self.policy.sha256,
+                                                           self.tools[name], time.monotonic(), self.approval_timeout)
+                    except ValueError:
+                        self._write(output, error(id, "This call is too large for complete approval review. No call was sent."))
+                        return
+                    self.awaiting[id_key(approval.id)] = approval
+                    self.log({"event": "approval_requested"})
+                    self._write(output, prompt)
+                    return
         elif method not in {"tools/list", "ping"}:
             self._write(output, error(id, "This guard supports tool discovery and calls only.", -32601))
             return
         self.pending[key] = {"id": id, "method": method, "at": time.monotonic()}
         self._write(child.stdin, msg)
+
+    @staticmethod
+    def _cancel_form(approval: Approval, output: BinaryIO) -> None:
+        Proxy._write(output, {"jsonrpc": "2.0", "method": "notifications/cancelled",
+                              "params": {"requestId": approval.id, "reason": "Approval is no longer pending."}})
+
+    def _deny_approval(self, approval: Approval, output: BinaryIO, reason: str) -> None:
+        self.log({"outcome": "denied", "reason": reason})
+        self._write(output, error(approval.call_id, "This call was not approved. No call was sent."))
+
+    def _expire_approvals(self, output: BinaryIO) -> None:
+        for key, approval in list(self.awaiting.items()):
+            if time.monotonic() >= approval.expires:
+                self.awaiting.pop(key)
+                self._cancel_form(approval, output)
+                self._deny_approval(approval, output, "approval_expired")
+
+    def _approval_response(self, msg: dict, child: Any, output: BinaryIO) -> None:
+        approval = self.awaiting.pop(id_key(msg.get("id")), None)
+        if approval is None:
+            return  # late, replayed or unsolicited replies never grant authority
+        call_key = id_key(approval.call_id)
+        with self.state_lock:
+            if call_key in self.cancelled or self.client_disconnected.is_set():
+                self.log({"outcome": "denied", "reason": "approval_cancelled"})
+                return
+            if time.monotonic() >= approval.expires:
+                self._deny_approval(approval, output, "approval_expired")
+                return
+            if not accepted(msg):
+                self._deny_approval(approval, output, "approval_declined")
+                return
+            action = parse(approval.action)
+            name, arguments = action["params"]["name"], action["params"]["arguments"]
+            if (self.discovery_failed or self.tools.get(name) != approval.definition
+                    or self.policy is None or not self.policy.allows(name, approval.definition, arguments)):
+                self._deny_approval(approval, output, "tool_policy")
+                return
+            # Check cancellation and dispatch under the same lock used by the
+            # transport reader. Cancellation after dispatch cannot undo a side effect.
+            self.pending[call_key] = {"id": approval.call_id, "method": "tools/call", "at": time.monotonic()}
+            self._write(child.stdin, action)
+            self.log({"event": "approval_accepted"})
 
     def _server(self, raw: bytes, child: Any, output: BinaryIO) -> None:
         msg = parse(raw)
@@ -234,7 +338,8 @@ class Proxy:
                 raise ValueError("Initialization was withheld")
             return
         if method == "initialize":
-            if "error" in msg or body.get("protocolVersion") not in VERSIONS:
+            if ("error" in msg or body.get("protocolVersion") not in VERSIONS
+                    or (self.require_approval and body.get("protocolVersion") not in APPROVAL_VERSIONS)):
                 self._write(output, error(id, "Upstream initialization failed or selected an unsupported version."))
                 raise ValueError("Initialization failed")
             msg = {**msg, "result": {**body, "capabilities": {"tools": {"listChanged": False}}}}
@@ -284,6 +389,10 @@ class Proxy:
             threading.Thread(target=self._reader, args=(stream, source), daemon=True).start()
         try:
             while True:
+                if self.client_disconnected.is_set():
+                    self.awaiting.clear()
+                else:
+                    self._expire_approvals(stdout)
                 if self.client_eof and not self.pending:
                     return 0
                 if any(time.monotonic() - req["at"] > self.request_timeout for req in self.pending.values()):
@@ -297,7 +406,7 @@ class Proxy:
                 if raw is None:
                     if source == "client":
                         self.client_eof = True
-                    elif self.pending:
+                    elif self.pending or self.awaiting:
                         raise ValueError("Upstream closed during request")
                     else:
                         return 0 if child.wait(timeout=2) == 0 else 2
@@ -306,7 +415,7 @@ class Proxy:
                 else:
                     self._server(raw, child, stdout)
         except (ValueError, UnicodeError, RecursionError, OSError, TimeoutError, subprocess.TimeoutExpired):
-            for req in self.pending.values():
+            for req in [*self.pending.values(), *({"id": a.call_id} for a in self.awaiting.values())]:
                 try:
                     self._write(stdout, error(req["id"], "Guarded connection failed; no further responses were released."))
                 except OSError:
@@ -314,6 +423,7 @@ class Proxy:
             self.log({"outcome": "unscanned", "reason": "connection_failed"})
             return 2
         finally:
+            self.awaiting.clear()
             self.stop.set()
             child.terminate()
             try:

@@ -226,6 +226,7 @@ def main(argv: list[str] | None = None) -> int:
     check.add_argument("path")
     wrap = commands.add_parser("wrap", help="Guard a legacy stdio MCP tool server.")
     wrap.add_argument("--policy", help="Owner-controlled JSON permissions. Deny calls without an exact matching rule.")
+    wrap.add_argument("--require-approval", action="store_true", help="Require a one-use host form approval for each policy-permitted call (experimental).")
     wrap.add_argument("command", nargs=argparse.REMAINDER, help="-- server-command arguments")
     args = parser.parse_args(argv)
     if sys.version_info < (3, 11):
@@ -259,6 +260,8 @@ def main(argv: list[str] | None = None) -> int:
             command = args.command[1:] if args.command[:1] == ["--"] else args.command
             if not command:
                 parser.error("wrap requires -- server-command arguments")
+            if args.require_approval and args.policy is None:
+                raise RuntimeError("Host approval requires --policy with owner-controlled exact tool rules.")
             if args.policy is not None:
                 from .guard_policy import Policy
                 policy = Policy.load(args.policy)
@@ -274,7 +277,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(result))
                 return {"allow": 0, "quarantine": 1, "unscanned": 2}[result["outcome"]]
             from .guard_proxy import Proxy
-            return Proxy(command, guard, policy=policy).run(sys.stdin.buffer, sys.stdout.buffer)
+            return Proxy(command, guard, policy=policy, require_approval=args.require_approval).run(sys.stdin.buffer, sys.stdout.buffer)
         finally:
             guard.close()
     except KeyboardInterrupt:

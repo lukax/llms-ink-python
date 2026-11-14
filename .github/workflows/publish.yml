@@ -19,7 +19,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e '.[guard]' pytest
       - run: llms-ink-guard setup
-      - run: pytest tests/test_guard.py tests/test_guard_policy.py
+      - run: pytest tests/test_guard.py tests/test_guard_policy.py tests/test_guard_approval.py
         env:
           LLMS_INK_GUARD_MODEL_TEST: '1'
   publish:

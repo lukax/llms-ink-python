@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0 — 2026-11-14
+
+- Experimental `wrap --policy FILE --require-approval`: request one-use host form approval before each exact policy-permitted call. No approval can broaden the policy.
+- Bind each pending action to immutable call bytes and the reviewed tool definition. Declines, invalid replies, timeout, cancellation, disconnect and definition changes do not dispatch the call; replayed replies cannot authorize another action.
+- Require form elicitation on MCP 2025-06-18 or 2025-11-25. One pending form, 60-second deadline and an 8 KiB complete review bound. No automatic grant, remember-choice option or upstream elicitation passthrough.
+- Discard only validated MCP progress tokens and Claude Code correlation IDs before exact-policy dispatch. Unknown call metadata and task extensions still fail.
+- Host responses are trusted, not proof of human presence; host hooks can auto-answer. Native tools, server startup, other connections and modern MCP revisions remain outside this boundary. Classifier, hosted Inspect and existing default modes are unchanged.
+
 ## 0.6.0 — 2026-11-14
 
 - Optional `llms-ink-guard wrap --policy FILE -- COMMAND`: deny outgoing tool calls unless the local policy matches the exact command, reviewed tool-definition hash and argument object.

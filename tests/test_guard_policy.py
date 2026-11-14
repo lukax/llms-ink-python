@@ -214,3 +214,15 @@ def test_real_stdio_denial_cannot_trigger_upstream_side_effect(tmp_path, changed
         assert "outside@example.com" not in json.dumps(c.logs)
     finally:
         c.close()
+
+
+@pytest.mark.parametrize('meta',[{}, {'progressToken':1}, {'progressToken':'progress'}, {'claudecode/toolUseId':'toolu_test'}, {'progressToken':2,'claudecode/toolUseId':'toolu_test'}])
+def test_known_host_correlation_metadata_is_discarded_before_exact_dispatch(meta):
+    _,upstream,response,_,_=dispatch({'name':'read','arguments':ARGS,'_meta':meta})
+    assert json.loads(upstream)['params']=={'name':'read','arguments':ARGS} and response==b''
+
+
+@pytest.mark.parametrize('meta',[None, [], {'progressToken':True}, {'progressToken':{}}, {'progressToken':'x'*129}, {'claudecode/toolUseId':1}, {'claudecode/toolUseId':''}, {'claudecode/toolUseId':'x'*129}, {'progressToken':1,'approved':True}])
+def test_invalid_or_unknown_metadata_remains_denied(meta):
+    _,upstream,response,_,_=dispatch({'name':'read','arguments':ARGS,'_meta':meta})
+    assert upstream==b'' and 'error' in json.loads(response)
