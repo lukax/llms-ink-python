@@ -917,6 +917,66 @@
       "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
       "receipt": "no_finding",
       "valid": false
+    },
+    {
+      "name": "unknown-unsafe-count",
+      "status": 503,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "unknown",
+        "coverage": "none",
+        "recommendation": "withhold",
+        "reason": "model_failure",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 9007199254740992,
+        "inspectedTokens": 0,
+        "windows": 0,
+        "enforced": false
+      },
+      "valid": false
+    },
+    {
+      "name": "unknown-success-status",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "unknown",
+        "coverage": "none",
+        "recommendation": "withhold",
+        "reason": "model_failure",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 5,
+        "inspectedTokens": 0,
+        "windows": 0,
+        "enforced": false
+      },
+      "valid": true
+    },
+    {
+      "name": "empty-token-coverage",
+      "status": 200,
+      "digest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+      "receipt": {
+        "detection": "no_finding",
+        "coverage": "complete",
+        "recommendation": "continue",
+        "reason": "no_finding",
+        "modelRevision": "4a43fec65a670e48835d8e8c85c705b4b0d1c907",
+        "policyRevision": "llms-ink-inspect-1",
+        "preprocessingRevision": "utf8-json-stringify-1",
+        "contentDigest": "6237bac32a849e9e194381696310ea5759eb33720449dbafc5956e0cada5900a",
+        "inputTokens": 0,
+        "inspectedTokens": 0,
+        "windows": 0,
+        "enforced": false
+      },
+      "valid": true
     }
   ]
 }
