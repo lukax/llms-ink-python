@@ -286,7 +286,7 @@ For JSON, serialize it yourself and pass the resulting string to `inspect()`. Th
 
 Python caps the client’s socket timeout at 65 seconds; pass `Client(timeout=...)` for a shorter timeout.
 
-## Several servers in one connection (experimental, 0.8.0)
+## Several servers in one connection (experimental, 0.9.0)
 
 On macOS/Linux with Python 3.11+, `gateway` puts up to eight legacy stdio servers behind one local model runtime and approval queue:
 
@@ -299,12 +299,26 @@ The configuration contains `version: 1` and a `servers` object. Each server has 
 
 A configured `docs` server's `read_document` tool becomes `docs__read_document`. Names cannot collide across servers. All configured definitions must match before any tool list is exposed; unknown tools stay hidden. The file is bounded to 256 KiB, eight servers, 128 tools and 1,024 exact argument objects. The combined discovery response must also fit the existing inspection limits. `gateway-check` validates configuration only; it does not start or certify the servers.
 
-Every permitted call requires a fresh form approval on MCP 2025-06-18 or 2025-11-25. There is no automatic-approval option in this command. Review shows the server-prefixed name, full arguments, the actual upstream command and bound fingerprints. One approval may be pending across all configured servers. Declining it, cancelling it, disconnecting, or replaying another connection's answer cannot dispatch the held action. Approval still trusts the host's answer; it does not attest a human was present.
+By default, every permitted call requires a fresh form approval on MCP 2025-06-18 or 2025-11-25. There is no automatic-approval option in this command. Review shows the server-prefixed name, full arguments, the actual upstream command and bound fingerprints. One approval may be pending across all configured servers. Declining it, cancelling it, disconnecting, or replaying another connection's answer cannot dispatch the held action. Approval still trusts the host's answer; it does not attest a human was present.
 
 The aggregate is tied to one stdio connection. Use a separate connection per host session; grouping by working directory or a model-supplied session string is not supported. A host that shares one connection across chats also shares this queue. This is not the proposed authenticated shared service, a cross-chat identity system, or persistent exposure tracking.
 
-The gateway requires every server to select the same supported legacy protocol version. It permits one complete discovery at a time, internally follows at most 16 pages per server and refuses duplicate/missing/changed reviewed definitions. A tool-list-change notification or any server disconnect stops the aggregate and revokes held approvals. Reconnect after reviewing the configuration. Unknown result paths, reverse requests, resources, prompts, tasks, HTTP transports and newer protocol revisions are not added by this release.
+The gateway requires every server to select the same supported legacy protocol version. It permits one complete discovery at a time, internally follows at most 16 pages per server and refuses duplicate/missing/changed reviewed definitions. A tool-list-change notification or any server disconnect stops the aggregate and revokes held approvals. Reconnect after reviewing the configuration. Unknown result paths, reverse requests, resources, prompts, tasks and HTTP transports are not added by this release. Modern client support is explicit below; upstream servers still use legacy stdio.
 
 Termination stops the owned POSIX process group. During the bounded model-startup handshake, a termination signal is deferred until the worker can be closed; no server is started after a pending stop. Cancellation after dispatch cannot undo a side effect. A server can act during startup or escape a process group; this is not a process/network sandbox or a pin of executable bytes. Native host tools and other connections remain outside the boundary.
 
 The tests use real subprocess journals, including a detector-missed source from server A that proposes an unapproved action through server B. This is containment/compatibility evidence, not an independent task-success or attack-prevention estimate. The published [task checks](https://llms.ink/guard/tasks/) and [detector limitations](https://llms.ink/inspect/evaluation/) still apply.
+
+### Modern MCP clients
+
+For a client using MCP 2026-07-28, select the adapter explicitly:
+
+```sh
+llms-ink-guard gateway --config /absolute/path/to/gateway.json --client-protocol 2026-07-28
+```
+
+The client uses `server/discover` and per-request protocol metadata instead of `initialize`. Upstream servers must support MCP 2025-11-25. Declare form elicitation capability on every tool call, including retries. Unsupported versions receive `-32022` with the supported version; unknown execution extensions are refused.
+
+A permitted call returns `resultType: "input_required"`, an unchecked approval form under `inputRequests.approval`, and an opaque `requestState`. After review, the client repeats the same tool and arguments with a new JSON-RPC ID, that state, and `inputResponses.approval`. The state is a random handle to an immutable action held in this process. It expires after 60 seconds, is consumed at most once, and cannot move to another connection or authorize changed arguments. It contains no serialized tool arguments or credentials.
+
+The adapter inspects the result after dispatch and returns `resultType: "complete"`. Upstream continuation fields cannot create approval forms. Client identity metadata is self-reported and never grants authority. The official Go MCP SDK interoperability test uses inert fixture effects and automated decisions; it does not establish full human-review rendering in a desktop host. This adapter does not add modern upstream servers, HTTP, a shared session service or persistent exposure state.

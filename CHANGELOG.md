@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0 — 2026-11-14
+
+- Add explicit `gateway --client-protocol 2026-07-28` for modern stdio clients, with per-request metadata, server discovery and MRTR form approvals. The configured upstream servers still use MCP 2025-11-25.
+- Bind each random continuation to the stored exact call, permission ceiling, reviewed definition and original expiry. Refuse tampering, replay, cross-connection state, missing per-call capabilities and unsupported execution extensions.
+- Preserve cancellation before dispatch, result inspection, shared approval limits and POSIX process cleanup. Suppress legacy reverse requests and upstream-supplied continuation fields.
+- Add real subprocess, real-model CLI and official MCP Go SDK 1.8.0 interoperability checks. Host responses remain trusted; this does not prove human presence or add authenticated cross-connection sessions.
+
 ## 0.8.0 — 2026-11-14
 
 - Experimental POSIX `gateway --config FILE`: aggregate up to eight reviewed legacy stdio servers behind one local inspection runtime, exact permissions and mandatory one-use host approval. Tool names are prefixed with the configured server identity.

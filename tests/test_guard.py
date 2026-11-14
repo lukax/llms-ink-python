@@ -135,14 +135,14 @@ for line in sys.stdin:
 
 
 class Connection:
-    def __init__(self, timeout=5, *, policy=None, command=None, **proxy_options):
+    def __init__(self, timeout=5, *, policy=None, command=None, proxy_class=Proxy, **proxy_options):
         read_in, write_in = os.pipe()
         read_out, write_out = os.pipe()
         self.input = os.fdopen(write_in, 'wb', buffering=0)
         self.output = os.fdopen(read_out, 'rb', buffering=0)
         self.guard = FakeGuard()
         self.logs = []
-        self.proxy = Proxy(command or [sys.executable, '-u', '-c', SERVER], self.guard, policy=policy, log=self.logs.append, request_timeout=timeout, **proxy_options)
+        self.proxy = proxy_class(command or [sys.executable, '-u', '-c', SERVER], self.guard, policy=policy, log=self.logs.append, request_timeout=timeout, **proxy_options)
         self.responses = queue.Queue()
         def run():
             with os.fdopen(read_in, 'rb', buffering=0) as inp, os.fdopen(write_out, 'wb', buffering=0) as out:

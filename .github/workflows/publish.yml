@@ -19,9 +19,15 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e '.[guard]' pytest
       - run: llms-ink-guard setup
-      - run: pytest tests/test_guard.py tests/test_guard_policy.py tests/test_guard_approval.py tests/test_guard_gateway.py
+      - uses: actions/setup-go@v6
+        if: matrix.python-version == '3.13'
+        with:
+          go-version: '1.26.11'
+          cache-dependency-path: tests/interop/modern-go/go.sum
+      - run: pytest tests/test_guard.py tests/test_guard_policy.py tests/test_guard_approval.py tests/test_guard_gateway.py tests/test_guard_modern.py
         env:
           LLMS_INK_GUARD_MODEL_TEST: '1'
+          LLMS_INK_GUARD_GO_TEST: ${{ matrix.python-version == '3.13' && '1' || '0' }}
   publish:
     needs: guard
     runs-on: ubuntu-latest

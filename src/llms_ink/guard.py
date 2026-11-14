@@ -228,6 +228,7 @@ def main(argv: list[str] | None = None) -> int:
     gateway_check.add_argument("path")
     gateway = commands.add_parser("gateway", help="Guard several legacy stdio servers with exact permissions and one-use host approvals (POSIX, experimental).")
     gateway.add_argument("--config", required=True, help="Owner-controlled JSON server definitions and exact arguments.")
+    gateway.add_argument("--client-protocol", choices=['legacy', '2026-07-28'], default='legacy', help="Client protocol; upstream servers remain legacy stdio. Modern calls use one-use approval continuations.")
     wrap = commands.add_parser("wrap", help="Guard a legacy stdio MCP tool server.")
     wrap.add_argument("--policy", help="Owner-controlled JSON permissions. Deny calls without an exact matching rule.")
     wrap.add_argument("--require-approval", action="store_true", help="Require a one-use host form approval for each policy-permitted call (experimental).")
@@ -307,6 +308,9 @@ def main(argv: list[str] | None = None) -> int:
                 return {"allow": 0, "quarantine": 1, "unscanned": 2}[result["outcome"]]
             from .guard_proxy import Proxy
             if config is not None:
+                if args.client_protocol == '2026-07-28':
+                    from .guard_modern import ModernProxy
+                    Proxy = ModernProxy
                 return Proxy(command, guard, policy=policy, require_approval=True,
                              review_commands=config.review_commands(), process_group=True).run(sys.stdin.buffer, sys.stdout.buffer)
             return Proxy(command, guard, policy=policy, require_approval=args.require_approval).run(sys.stdin.buffer, sys.stdout.buffer)

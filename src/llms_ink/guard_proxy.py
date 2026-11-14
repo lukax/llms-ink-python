@@ -147,9 +147,7 @@ class Proxy:
                         try:
                             msg = parse(raw)
                             if msg.get("method") == "notifications/cancelled":
-                                key = id_key(msg.get("params", {}).get("requestId"))
-                                with self.state_lock:
-                                    self.cancelled.add(key)
+                                self._record_cancel(msg.get("params", {}).get("requestId"))
                         except (ValueError, TypeError, AttributeError, RecursionError):
                             pass
                     self._event((source, raw))
@@ -158,6 +156,14 @@ class Proxy:
                 self._event((source, None))
         except (OSError, ValueError):
             self._event(("fatal", "transport_failure"))
+
+    def _record_cancel(self, request_id: Any) -> None:
+        key = id_key(request_id)
+        with self.state_lock:
+            if len(self.cancelled) >= 4096:
+                self.client_disconnected.set()
+                return
+            self.cancelled.add(key)
 
     def _event(self, event: tuple) -> None:
         while not self.stop.is_set():
