@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0 — 2026-11-14
+
+- Optional `llms-ink-guard wrap --policy FILE -- COMMAND`: deny outgoing tool calls unless the local policy matches the exact command, reviewed tool-definition hash and argument object.
+- Load and validate permissions before starting the model or server; hold an immutable snapshot for the connection. Hide unapproved definitions from discovery. Model results and server annotations cannot grant permissions.
+- `policy-check` validates permissions without running a server; `tool-hash` fingerprints a reviewed tool object from stdin.
+- Reject ambiguous JSON, unsupported call extensions and malformed discovery. Payload-free denial events; no automatic approval, wildcards or live policy edits.
+- Classifier/model unchanged. The published 0.4.0 InjecAgent evaluation missed all 1,054 attacks; this action boundary is separate from content detection and does not sandbox the server or cover native host tools.
+
 ## 0.5.0 — 2026-11-14
 
 - Explicit hosted `inspect(text)` with immutable, digest-bound receipts and pilot revision validation.

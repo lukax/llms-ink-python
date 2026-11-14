@@ -221,12 +221,32 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("setup", help="Download and verify pinned model files and their license (about 96 MB).")
     commands.add_parser("status", help="Verify local model files; does not download anything.")
     commands.add_parser("scan", help="Inspect stdin text; emit JSON. Exit 0 allow, 1 quarantine, 2 unscanned.")
+    commands.add_parser("tool-hash", help="Hash one reviewed tools/list tool object from stdin; no model or server needed.")
+    check = commands.add_parser("policy-check", help="Validate a local permission file; no model or server needed.")
+    check.add_argument("path")
     wrap = commands.add_parser("wrap", help="Guard a legacy stdio MCP tool server.")
+    wrap.add_argument("--policy", help="Owner-controlled JSON permissions. Deny calls without an exact matching rule.")
     wrap.add_argument("command", nargs=argparse.REMAINDER, help="-- server-command arguments")
     args = parser.parse_args(argv)
     if sys.version_info < (3, 11):
         parser.error("The optional guard requires Python 3.11 or newer.")
     try:
+        if args.action == "policy-check":
+            from .guard_policy import Policy
+            policy = Policy.load(args.path)
+            print(json.dumps({"valid": True, "version": 1, "tools": len(policy.tools), "sha256": policy.sha256}))
+            return 0
+        if args.action == "tool-hash":
+            from .guard_policy import decode, tool_digest
+            raw = sys.stdin.buffer.read(MAX_BYTES + 1)
+            if len(raw) > MAX_BYTES:
+                raise RuntimeError("Tool definition exceeds 1 MiB.")
+            try:
+                digest = tool_digest(decode(raw))
+            except (ValueError, TypeError, RecursionError):
+                raise RuntimeError("Invalid tool definition. Provide one complete reviewed tools/list object as JSON.") from None
+            print(digest)
+            return 0
         if args.action == "setup":
             setup(model_dir())
             return 0
@@ -234,10 +254,15 @@ def main(argv: list[str] | None = None) -> int:
             verify_assets(model_dir())
             print(json.dumps({"installed": True, "modelRevision": MODEL_REVISION, "license": "Llama 4 Community License"}))
             return 0
+        policy = None
         if args.action == "wrap":
             command = args.command[1:] if args.command[:1] == ["--"] else args.command
             if not command:
                 parser.error("wrap requires -- server-command arguments")
+            if args.policy is not None:
+                from .guard_policy import Policy
+                policy = Policy.load(args.policy)
+                policy.check_command(command)
         guard = LocalGuard()
         try:
             if args.action == "scan":
@@ -249,7 +274,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(result))
                 return {"allow": 0, "quarantine": 1, "unscanned": 2}[result["outcome"]]
             from .guard_proxy import Proxy
-            return Proxy(command, guard).run(sys.stdin.buffer, sys.stdout.buffer)
+            return Proxy(command, guard, policy=policy).run(sys.stdin.buffer, sys.stdout.buffer)
         finally:
             guard.close()
     except KeyboardInterrupt:

@@ -138,7 +138,7 @@ https://llms.ink/mcp directly.
 Python 3.11 or newer. Install the optional runtime and explicitly download the pinned model:
 
 ```sh
-pip install 'llms-ink[guard]==0.4.0'
+pip install 'llms-ink[guard]==0.6.0'
 llms-ink-guard setup
 llms-ink-guard status
 ```
@@ -159,7 +159,8 @@ Limits: 1 MiB per message, 8,192 model tokens per response, 20 seconds per inspe
 120 seconds per request, 512 discovered tools and 4,096 unique request IDs per connection. Restart to renew a
 connection. Legacy tool discovery/calls only: no batches, resources, prompts, sampling, elicitation, images, audio
 or embedded/resource-link content. Server stderr and unsolicited notifications are suppressed. Decision events
-on stderr contain no response payload. This is not a sandbox or an outgoing-action authorization layer.
+on stderr contain no response payload. Plain response scanning does not authorize outgoing actions. Neither
+mode sandboxes the server or covers other connections and native host tools.
 
 `llms-ink-guard scan < document.txt` prints an inspection receipt: exit 0 allows, 1 quarantines, 2 means unscanned
 or unavailable. An allow decision is not proof of safety. The model is English-centric; this pilot has not met
@@ -171,6 +172,56 @@ No scanning API receives content; upstream MCP servers still receive requests. O
 with `LLMS_INK_GUARD_CACHE` if needed. This is an independent integration of Pinata's model, not its Doorman app.
 Built with Llama. Weights are separately licensed under the Llama 4 Community License; setup downloads and preserves
 `LICENSE` and `NOTICE`. See the [setup guide](https://llms.ink/guard/).
+
+### Local tool permissions (0.6.0)
+
+`wrap --policy` adds a separate, deny-by-default permission check before forwarding tool calls.
+The owner supplies the exact server command, reviewed tool-definition hashes and allowed argument objects.
+Model findings and server annotations cannot grant permissions. The classifier itself is unchanged:
+it missed all 1,054 attacks in the published [InjecAgent evaluation](https://llms.ink/inspect/evaluation/).
+
+Save one complete, reviewed tool object from `tools/list` as `tool.json`, then fingerprint it:
+
+```sh
+llms-ink-guard tool-hash < tool.json
+```
+
+Write a `policy.json` using your reviewed executable, tool hash and argument objects:
+
+```json
+{
+  "version": 1,
+  "command": ["/opt/mcp/docs-server"],
+  "tools": {
+    "read": {
+      "definitionSha256": "REPLACE_WITH_REVIEWED_TOOL_SHA256",
+      "arguments": [{"url": "https://docs.example/reference", "format": "text"}]
+    }
+  }
+}
+```
+
+```sh
+llms-ink-guard policy-check /absolute/path/to/policy.json
+llms-ink-guard wrap --policy /absolute/path/to/policy.json -- /opt/mcp/docs-server
+```
+
+The policy is validated before the model/server starts, then held as an immutable snapshot. The executable
+path must be absolute and its argument list must match. Discovery exposes only approved definitions; changed
+or unapproved definitions cannot be called. Missing rules, changed arguments, extra call metadata and task
+extensions are denied. Denial events contain no tool names or arguments. Edit the policy and restart after
+owner review; there is no agent approval tool or live reload. An empty `tools` object denies all tool calls.
+
+Version 1 supports exact JSON objects only: key order is ignored, but string values and numeric types must
+match. No wildcards, path/URL normalization, or schema-based permission rules. Limits: 256 KiB policy, 512
+tools, 128 argument alternatives per tool, 1,024 alternatives total. Ambiguous JSON and unsupported numeric
+values fail closed. Keep the file and parent directories outside the agent's write access; group/world-writable
+files on Unix and symlink files are rejected.
+
+The command and advertised definition are checked, not executable bytes, environment variables, working
+directory or remote behavior. A server can act as soon as it starts; use trusted code and limited credentials.
+Permitted calls can have side effects. `llms-ink-mcp --guard` and plain `wrap` remain response-only modes.
+See the [permission guide](https://llms.ink/guard/policy/) for a complete example and the enforcement scope.
 
 ## Development
 

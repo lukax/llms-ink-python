@@ -1,12 +1,12 @@
 """Bounded stdio proxy for legacy MCP tool servers. Inspection precedes delivery.
 
+Optional trusted local policy restricts outgoing calls on this connection.
 This is not a sandbox for the subprocess or an authorization layer for host tools.
 Unsolicited server notifications and stderr are suppressed, so they cannot become
 an alternate uninspected content path. Unsupported protocol features fail closed.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import queue
 import re
@@ -17,6 +17,7 @@ import time
 from typing import Any, BinaryIO
 
 from .guard import MAX_BYTES, receipt
+from .guard_policy import Policy, decode, tool_digest
 
 VERSIONS = {"2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"}
 NAME = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
@@ -25,9 +26,7 @@ MAX_TOOLS = 512
 
 
 def parse(raw: bytes) -> dict:
-    def invalid(_: str) -> None:
-        raise ValueError("Non-finite JSON")
-    message = json.loads(raw.decode("utf-8"), parse_constant=invalid)
+    message = decode(raw)
     if not isinstance(message, dict) or message.get("jsonrpc") != "2.0":
         raise ValueError("Invalid message")
     return message
@@ -80,8 +79,11 @@ def supported_result(method: str, body: Any) -> bool:
 
 
 class Proxy:
-    def __init__(self, command: list[str], guard: Any, *, request_timeout: float = 120, log: Any = None):
-        self.command, self.guard = command, guard
+    def __init__(self, command: list[str], guard: Any, *, policy: Policy | None = None, request_timeout: float = 120, log: Any = None):
+        self.command, self.guard = list(command), guard
+        self.policy = policy
+        if policy is not None:
+            policy.check_command(self.command)
         self.request_timeout = request_timeout
         self.log = log or (lambda data: print(json.dumps(data, separators=(",", ":")), file=sys.stderr, flush=True))
         self.pending: dict[tuple, dict] = {}
@@ -172,9 +174,21 @@ class Proxy:
             self._write(output, error(id, "Initialize the guarded connection first.", -32600))
             return
         elif method == "tools/call":
-            if self.discovery_failed or params.get("name") not in self.tools:
+            name = params.get("name")
+            if type(name) is not str or self.discovery_failed or name not in self.tools:
                 self._write(output, error(id, "Discover an inspected tool with tools/list before calling it.", -32602))
                 return
+            if self.policy is not None:
+                arguments = params.get("arguments", {})
+                # Unknown metadata/extensions could change execution semantics.
+                # Do not forward them, even alongside an otherwise allowed call.
+                if (set(msg) != {"jsonrpc", "id", "method", "params"}
+                        or set(params) - {"name", "arguments"} or type(arguments) is not dict
+                        or not self.policy.allows(name, self.tools[name], arguments)):
+                    self.log({"outcome": "denied", "reason": "tool_policy"})
+                    self._write(output, error(id, "Local policy denied this tool call. Ask the policy owner to review the required action."))
+                    return
+                msg = {**msg, "params": {"name": name, "arguments": arguments}}
         elif method not in {"tools/list", "ping"}:
             self._write(output, error(id, "This guard supports tool discovery and calls only.", -32601))
             return
@@ -228,6 +242,7 @@ class Proxy:
         elif method == "tools/list" and "result" in msg:
             listed = body.get("tools")
             if not isinstance(listed, list) or len(listed) > MAX_TOOLS:
+                self.discovery_failed = True
                 self._write(output, withheld(id, method, "invalid_tool_list"))
                 return
             updates = {}
@@ -241,7 +256,7 @@ class Proxy:
                     self._write(output, withheld(id, method, "invalid_tool_definition"))
                     return
                 name = tool["name"]
-                digest = hashlib.sha256(json.dumps(tool, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+                digest = tool_digest(tool)
                 if name in updates:
                     changed = True
                 if name in self.tools and self.tools[name] != digest:
@@ -253,9 +268,15 @@ class Proxy:
                 self._write(output, withheld(id, method, "tool_definition_changed"))
                 return
             self.tools.update(updates)
+            if self.policy is not None:
+                permitted = [tool for tool in listed if self.policy.exposes(tool["name"], updates[tool["name"]])]
+                msg = {**msg, "result": {**body, "tools": permitted}}
         self._write(output, msg)
 
     def run(self, stdin: BinaryIO, stdout: BinaryIO) -> int:
+        if self.policy is not None:
+            self.policy.check_command(self.command)
+            self.log({"event": "tool_policy_loaded", "version": 1, "sha256": self.policy.sha256})
         # A subprocess's stderr may be surfaced by a host. Suppress it rather than
         # accidentally creating an uninspected output path.
         child = subprocess.Popen(self.command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
