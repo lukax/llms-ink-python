@@ -226,6 +226,16 @@ def main(argv: list[str] | None = None) -> int:
     check.add_argument("path")
     gateway_check = commands.add_parser("gateway-check", help="Validate a reviewed multi-server configuration without starting a model or server.")
     gateway_check.add_argument("path")
+    proposal = commands.add_parser('gateway-propose', help='Propose one exact argument object for an existing tool; does not grant authority or start a server.')
+    proposal.add_argument('--config', required=True)
+    proposal.add_argument('--server', required=True)
+    proposal.add_argument('--tool', required=True)
+    proposal.add_argument('--arguments', required=True, help='Owner-controlled JSON file containing one argument object.')
+    proposal.add_argument('--output', required=True, help='New proposal file in an owner-only directory.')
+    review = commands.add_parser('gateway-review', help='Review one proposal in an owner terminal and write a new configuration only after explicit acceptance.')
+    review.add_argument('--config', required=True)
+    review.add_argument('--proposal', required=True)
+    review.add_argument('--output', required=True, help='New configuration file in an owner-only directory; never overwrites or activates an existing scope.')
     gateway = commands.add_parser("gateway", help="Guard several legacy stdio servers with exact permissions and one-use host approvals (POSIX, experimental).")
     gateway.add_argument("--config", required=True, help="Owner-controlled JSON server definitions and exact arguments.")
     gateway.add_argument("--client-protocol", choices=['legacy', '2026-07-28'], default='legacy', help="Client protocol; upstream servers remain legacy stdio. Modern calls use one-use approval continuations.")
@@ -257,6 +267,16 @@ def main(argv: list[str] | None = None) -> int:
     startup = [True, False]
     service = None
     try:
+        if args.action in {'gateway-propose', 'gateway-review'}:
+            if os.name != 'posix': raise RuntimeError('Owner terminal review requires macOS or Linux.')
+            from . import guard_review
+            try:
+                if args.action == 'gateway-propose':
+                    print(json.dumps(guard_review.propose(args.config, args.server, args.tool, args.arguments, args.output)))
+                    return 0
+                return guard_review.review(args.config, args.proposal, args.output, sys.stdin, sys.stdout)
+            except (OSError, ValueError, TypeError, RecursionError):
+                raise RuntimeError('Permission review failed. Check the owner-controlled inputs, unchanged base configuration, complete review size and new output path in a private directory. No existing scope was changed.') from None
         if args.action in {'service-init', 'service-serve', 'service-status', 'session-create', 'session-revoke', 'connect'}:
             if os.name != 'posix':
                 raise RuntimeError('The local session service requires macOS or Linux.')

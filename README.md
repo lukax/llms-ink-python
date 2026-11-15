@@ -355,3 +355,23 @@ Sessions default to one hour (`--ttl`, maximum 86,400 seconds). Limits are 16 li
 Revocation, expiry and upstream transport failure invalidate held calls across the session. Cancellation and authority are checked immediately before the first dispatch byte, including after a pipe stalls. A dispatched effect cannot be undone. Restarting the service invalidates all old session capabilities; it is not evidence that a host removed prior context. A normal stop removes its own socket. After an unclean crash, use a new private service directory and reissue sessions. Existing sockets and credential files are never silently replaced.
 
 **Trust boundary:** file/socket permissions do not isolate malicious code running as the same OS user. Keep the owner credential outside agent/upstream access through a trusted execution boundary. This does not sandbox servers, native shell/file tools, or a compromised host. Approval responses still trust the host and do not prove a person reviewed them. The service exposes no HTTP listener, team account, billing or automatic chat detection. [Setup and limits](https://llms.ink/guard/service/).
+
+## Owner-reviewed additions (experimental, 0.11.0)
+
+When an intended call does not match your gateway configuration, an owner can propose **one exact argument object for an existing tool** and review it in a terminal. Nothing is normalized or granted automatically. Start with the reviewed gateway configuration, and create a private directory outside agent access:
+
+```sh
+mkdir -m 700 "$HOME/.llms-ink-permissions"
+# Save the exact proposed JSON object in this directory as arguments.json.
+llms-ink-guard gateway-propose --config /absolute/path/to/gateway.json \
+  --server docs --tool read_document \
+  --arguments "$HOME/.llms-ink-permissions/arguments.json" \
+  --output "$HOME/.llms-ink-permissions/proposal.json"
+llms-ink-guard gateway-review --config /absolute/path/to/gateway.json \
+  --proposal "$HOME/.llms-ink-permissions/proposal.json" \
+  --output "$HOME/.llms-ink-permissions/gateway-next.json"
+```
+
+Replace the illustrative server/tool and paths. A proposal cannot be loaded as a gateway configuration. Review shows the complete command, definition, existing grants and proposed addition as escaped JSON, plus the candidate fingerprint and destination. Only the fresh displayed challenge, typed within 120 seconds in an owner terminal, accepts. Enter, EOF, timeout, interruption, changed inputs or an existing output path refuse publication. No `--yes` or piped acceptance is supported. Reviews over 32 KiB are refused whole.
+
+Acceptance writes a new mode-0600 configuration in an owner-only directory, without editing the base or starting a server/model. The owner must explicitly start a new gateway or service with that file; running scopes remain unchanged and action approval is still required. An interrupted successful publication can leave the complete new file: inspect the destination before retrying. This does not add tools/servers, infer task intent, validate all JSON Schema semantics, prove human presence or isolate malicious same-user code. [Workflow and boundary](https://llms.ink/guard/review/).

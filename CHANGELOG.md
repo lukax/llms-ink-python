@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.0 — 2026-11-14
+
+- Add `gateway-propose` for one exact argument object on an existing reviewed tool. Proposals bind the current configuration digest and cannot be loaded as active gateway configurations. No model or server starts.
+- Add `gateway-review`: show complete command, definition, existing arguments and proposed addition as escaped JSON in an owner terminal. A fresh typed challenge within 120 seconds writes a new owner-only configuration atomically; Enter, EOF, timeout, interruption, stale inputs and existing destinations refuse publication.
+- Keep running connections and sessions immutable. The owner must explicitly start a new gateway or service with the approved file; per-action approvals remain mandatory. No argument normalization, new server/tool grants, automatic scope expansion or same-user process isolation.
+
 ## 0.10.0 — 2026-11-14
 
 - Add an experimental authenticated local session service over private Unix sockets. Owner credentials issue/revoke session capabilities; session credentials can only attach MCP connections. Credentials stay in exclusive owner-only files and never enter tool requests or upstream command arguments.
