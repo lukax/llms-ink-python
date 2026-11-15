@@ -417,7 +417,7 @@ Replace every placeholder below with the reviewed absolute executable path or th
   /absolute/venv/bin/llms-ink-guard container-run \
   --state-dir "$HOME/.ink-offline-runtime" \
   --docker /absolute/path/to/docker --context YOUR_LOCAL_CONTEXT \
-  --daemon-id YOUR_REVIEWED_DAEMON_ID --image sha256:YOUR_LOCAL_IMAGE_ID \
+  --daemon-id YOUR_REVIEWED_DAEMON_ID --image YOUR_LOCAL_IMAGE_ID \
   --profile llms-ink-offline-2 --seconds 300 -- \
   /usr/local/bin/python3 -I -S /app/server.py
 ```

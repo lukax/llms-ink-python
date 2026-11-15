@@ -411,7 +411,7 @@ def test_proxy_credentials_from_cli_config_are_not_forwarded(state, tmp_path, mo
 
 
 @live
-@pytest.mark.parametrize('ending', ['revoke', 'expire'])
+@pytest.mark.parametrize('ending', ['revoke', 'expire', 'container_expire'])
 def test_authenticated_session_end_removes_container(state, tmp_path, ending):
     import tempfile
     import threading
@@ -419,7 +419,7 @@ def test_authenticated_session_end_removes_container(state, tmp_path, ending):
     from .test_guard_service import Model, Wire, issue
     config = tmp_path/'service-gateway.json'
     config.write_text(json.dumps({'version':1,'servers':{'docs':{
-        'command':command(state, code=SERVER, seconds=30),
+        'command':command(state, code=SERVER, seconds=2 if ending == 'container_expire' else 30),
         'tools':[{'definition':TOOL,'arguments':[{'destination':'safe'}]}]}}})); config.chmod(0o600)
     with tempfile.TemporaryDirectory(prefix='ink-svc-') as directory:
         initialize(directory); owner = Path(directory)/'owner.json'
@@ -437,6 +437,9 @@ def test_authenticated_session_end_removes_container(state, tmp_path, ending):
                 data = lease(state); docker = cli(data)
                 assert wire.call('docs__act')['method'] == 'elicitation/create'
                 if ending == 'revoke': assert control(owner,'revoke',sessionId=sid)['ok']
+                if ending == 'container_expire':
+                    failed = wire.response()
+                    assert failed['id'] == wire.serial and 'error' in failed and 'result' not in failed
                 assert wire.stream.readline() == b''
                 with pytest.raises(RuntimeError): attach(credential)
             wait_for(lambda: not list(state.glob('*.json')))
