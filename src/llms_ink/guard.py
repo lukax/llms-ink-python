@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 import sys
 import tempfile
+import threading
 import time
 import urllib.request
 from typing import Any
@@ -179,6 +180,7 @@ class LocalGuard:
     def __init__(self, root: Path | None = None, timeout: float = 20):
         self.timeout = timeout
         self.closed = False
+        self._close_lock = threading.Lock()
         verify_assets(root or model_dir())
         context = multiprocessing.get_context("spawn")
         self.connection, child = context.Pipe()
@@ -207,11 +209,24 @@ class LocalGuard:
             return receipt("unscanned", "model_unavailable", coverage="none")
 
     def close(self) -> None:
-        self.closed = True
-        if self.process.is_alive():
-            self.process.terminate()
-        self.process.join(timeout=2)
-        self.connection.close()
+        # Inspection failure and service shutdown can arrive on different
+        # threads. multiprocessing.Process wait/reap state is not thread-safe.
+        # Keep this separate from the inspection lock: closing must unblock an
+        # inspector waiting for a response from a stopped or failed worker.
+        with self._close_lock:
+            self.closed = True
+            try:
+                if self.process.is_alive():
+                    self.process.terminate()
+                self.process.join(timeout=2)
+                # SIGTERM cannot wake a SIGSTOP'ed worker.
+                if self.process.is_alive():
+                    self.process.kill()
+                    self.process.join(timeout=2)
+                    if self.process.is_alive():
+                        raise RuntimeError("The local model worker did not stop.")
+            finally:
+                self.connection.close()
 
 
 def main(argv: list[str] | None = None) -> int:

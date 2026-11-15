@@ -356,7 +356,7 @@ Revocation, expiry and upstream transport failure invalidate held calls across t
 
 **Trust boundary:** file/socket permissions do not isolate malicious code running as the same OS user. Keep the owner credential outside agent/upstream access through a trusted execution boundary. This does not sandbox servers, native shell/file tools, or a compromised host. Approval responses still trust the host and do not prove a person reviewed them. The service exposes no HTTP listener, team account, billing or automatic chat detection. [Setup and limits](https://llms.ink/guard/service/).
 
-## Owner-reviewed additions (experimental, 0.11.0)
+## Owner-reviewed additions (experimental, 0.11.1)
 
 When an intended call does not match your gateway configuration, an owner can propose **one exact argument object for an existing tool** and review it in a terminal. Nothing is normalized or granted automatically. Start with the reviewed gateway configuration, and create a private directory outside agent access:
 

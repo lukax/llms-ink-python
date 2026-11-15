@@ -306,3 +306,59 @@ def test_dead_model_never_fails_open():
         assert guard.inspect('ordinary text')['outcome'] == 'unscanned'
     finally:
         guard.close()
+
+
+def _idle_worker(connection):
+    connection.send({'ready': True})
+    time.sleep(60)
+
+
+@pytest.mark.skipif(os.name != 'posix', reason='Stopped worker fault injection requires POSIX')
+def test_concurrent_shutdown_reaps_stopped_worker_and_refuses_further_inspection():
+    import multiprocessing
+    import signal
+    from llms_ink.guard_service import SharedGuard
+
+    # Exercise the real OS process lifecycle without downloading/loading a model.
+    context = multiprocessing.get_context('spawn')
+    guard = LocalGuard.__new__(LocalGuard)
+    guard.closed = False
+    guard._close_lock = threading.Lock()
+    guard.connection, child = context.Pipe()
+    guard.process = context.Process(target=_idle_worker, args=(child,))
+    guard.process.start()
+    child.close()
+    shared = SharedGuard(guard)
+    barrier = threading.Barrier(9)
+    failures = []
+    threads = []
+    def close(target):
+        try:
+            barrier.wait(timeout=5)
+            target.close()
+        except BaseException as exc:
+            failures.append(exc)
+    try:
+        assert guard.connection.poll(5)
+        assert guard.connection.recv() == {'ready': True}
+        os.kill(guard.process.pid, signal.SIGSTOP)
+        pid, status = os.waitpid(guard.process.pid, os.WUNTRACED)
+        assert pid == guard.process.pid and os.WIFSTOPPED(status)
+        # Both service shutdown and inspector failure own this same worker.
+        threads = [threading.Thread(target=close, args=(guard if i % 2 else shared,)) for i in range(8)]
+        for thread in threads: thread.start()
+        barrier.wait(timeout=5)
+        for thread in threads: thread.join(timeout=6)
+        assert not any(thread.is_alive() for thread in threads)
+        assert not failures, failures
+        assert guard.process.exitcode in (-signal.SIGTERM, -signal.SIGKILL)
+        assert guard.connection.closed
+        with pytest.raises(ProcessLookupError): os.kill(guard.process.pid, 0)
+        assert guard.inspect('ordinary text')['outcome'] == 'unscanned'
+        assert shared.inspect('ordinary text')['outcome'] == 'unscanned'
+        guard.close()  # Repeated cleanup is safe after the process was reaped.
+    finally:
+        for thread in threads: thread.join(timeout=6)
+        if guard.process.is_alive(): guard.process.kill()
+        guard.process.join(timeout=2)
+        guard.connection.close()

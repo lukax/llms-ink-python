@@ -238,14 +238,6 @@ class SharedGuard:
         # sessions are revoked and their sockets closed before this is invoked.
         if self.guard is not None:
             self.guard.close()
-            # SIGTERM cannot wake a stopped model worker. The service owns this
-            # process and must reap it before finishing shutdown.
-            process = getattr(self.guard, 'process', None)
-            if process is not None and process.is_alive():
-                process.kill()
-                process.join(timeout=2)
-                if process.is_alive():
-                    raise RuntimeError('The local model worker did not stop.')
 
 
 @dataclass

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.1 — 2026-11-14
+
+- Serialize local model cleanup when inspection failure and service shutdown overlap. Force-stop and reap stopped workers within the same lifecycle lock; close the pipe even if cleanup fails.
+- Include the owner review workflow below. The v0.11.0 tag failed its Linux Python 3.13 shutdown check and was not published to PyPI. The failed tag remains unchanged.
+
 ## 0.11.0 — 2026-11-14
 
 - Add `gateway-propose` for one exact argument object on an existing reviewed tool. Proposals bind the current configuration digest and cannot be loaded as active gateway configurations. No model or server starts.
