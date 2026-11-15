@@ -4,7 +4,7 @@
     >>> Client().llms("llmstxt.org").text
 """
 
-__version__ = "0.13.0"
+__version__ = "0.14.0"
 
 from .client import (  # noqa: E402
     DEFAULT_BASE_URL,

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.0 — 2026-11-15
+
+- Add opt-in owner-bound session lifetimes: `session-create --host-bound` refuses attachment until an authenticated owner watcher connects. `session-watch` ties that binding to an idle host stdin pipe; disconnect, EOF, unexpected input, expiry or owner revocation invalidates all attached authority.
+- Keep the existing fixed TTL and refuse watcher replacement or automatic renewal. Ordinary unbound sessions retain their existing behavior. Session credentials cannot bind or broaden authority.
+- Revoke under the dispatch lock before waiting for connection-registry cleanup. Bound total socket handlers to 40, including at most 16 watchers and eight MCP connections.
+- Cover both protocols, pending approvals, independent sessions, premature attachment, watcher termination and delayed registry cleanup. This adds no resume, persistent exposure ledger, isolation or detector-policy change.
+
 ## 0.13.0 — 2026-11-15
 
 - Add opt-in `container-run` for reviewed offline stdio servers: explicit image/profile/daemon binding, a non-root read-only container, no host mounts or network, fixed resource limits and no automatic image pulls. The image must contain a trusted `/usr/local/bin/python3` interpreter.

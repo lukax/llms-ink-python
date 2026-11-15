@@ -262,16 +262,31 @@ def test_doctor_compares_running_policy_without_issuing_or_revoking_sessions(tmp
 def test_prequeued_exact_launch_answer_is_discarded(tmp_path, monkeypatch):
     import pty
     import secrets
+    import select
+    import threading
     command, _, output = fixture(tmp_path)
     master, slave = pty.openpty()
     monkeypatch.setattr(secrets, 'token_hex', lambda size: 'a'*(size*2))
     monkeypatch.setattr(setup, 'PROMPT_SECONDS', .05)
+    # A real terminal drains rendered output. Without this reader, a long
+    # checkout path can fill a small PTY buffer before the input deadline starts.
+    stop = threading.Event()
+    def drain():
+        while not stop.is_set():
+            if select.select([master], [], [], .05)[0]:
+                try: os.read(master, 65536)
+                except OSError: return
+    reader = threading.Thread(target=drain)
+    reader.start()
     try:
         os.write(master, b'launch aaaaaaaaaaaaaaaa\n')
         with os.fdopen(os.dup(slave), 'r') as stdin, os.fdopen(os.dup(slave), 'w') as stdout:
             assert setup.initialize('docs', command, output, stdin, stdout) == 1
         assert not output.exists() and not (tmp_path/'docs.jsonl.pid').exists()
-    finally: os.close(master); os.close(slave)
+    finally:
+        stop.set(); reader.join(timeout=1)
+        os.close(master); os.close(slave)
+        assert not reader.is_alive()
 
 
 @pytest.mark.parametrize('fault', ['duplicate', 'not-object', 'oversized-review', 'symlink-arguments', 'overflow-selection', 'wrong-challenge'])

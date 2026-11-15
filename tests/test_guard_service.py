@@ -61,6 +61,129 @@ def issue(owner,name='a',protocol='legacy',ttl=60):
     return output,info['sessionId']
 
 
+def watch(owner, sid):
+    credential = read_credential(owner)
+    sock = open_socket(credential)
+    try:
+        send(sock, {'op': 'watch', 'token': credential['token'], 'sessionId': sid})
+        with sock.makefile('rb', buffering=0) as stream:
+            assert frame(stream) == {'ok': True, 'sessionId': sid}
+        return sock
+    except BaseException:
+        sock.close()
+        raise
+
+
+def inactive(owner, sid):
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        states = control(owner, 'status')['sessions']
+        if not any(s['sessionId'] == sid and s['active'] for s in states):
+            return
+        time.sleep(.02)
+    pytest.fail('Host-bound authority was not revoked')
+
+
+@pytest.mark.parametrize('protocol', ['legacy', '2026-07-28'])
+def test_host_binding_requires_owner_before_attach_and_revokes_all_peers(tmp_path, protocol):
+    with service(tmp_path) as (_, owner, logs):
+        file = owner.parent / 'bound.json'
+        sid = create_session(owner, file, protocol, 60, host_bound=True)['sessionId']
+        with pytest.raises(RuntimeError):
+            attach(file)
+        assert not list(tmp_path.glob('*.pids'))
+        other, other_id = issue(owner, 'independent', protocol)
+        with watch(owner, sid) as host:
+            with Wire(file) as a, Wire(file) as b, Wire(other) as c:
+                a.ready(); b.ready(); c.ready()
+                a.call()
+                host.shutdown(socket.SHUT_RDWR)
+                inactive(owner, sid)
+                assert a.stream.readline() == b'' and b.stream.readline() == b''
+                with pytest.raises(RuntimeError): attach(file)
+                assert not effects(tmp_path, 'mail')
+                prompt = c.call('docs__act')
+                assert 'result' in c.approve(prompt, 'docs__act')
+                assert len(effects(tmp_path, 'docs')) == 1
+                assert any(s['sessionId'] == other_id and s['active'] for s in control(owner, 'status')['sessions'])
+        assert {'event': 'host_disconnected'} in logs
+
+
+def test_watch_cannot_be_created_by_session_replaced_or_attached_to_unbound_session(tmp_path):
+    with service(tmp_path) as (_, owner, _):
+        file = owner.parent / 'bound.json'
+        sid = create_session(owner, file, host_bound=True)['sessionId']
+        plain, plain_id = issue(owner)
+        session = read_credential(file)
+        for token, target in [(session['token'], sid), (read_credential(owner)['token'], plain_id)]:
+            with open_socket(read_credential(owner)) as sock, sock.makefile('rb', buffering=0) as stream:
+                send(sock, {'op': 'watch', 'token': token, 'sessionId': target})
+                assert frame(stream)['ok'] is False
+        with watch(owner, sid):
+            with pytest.raises(RuntimeError): control(owner, 'watch', sessionId=sid)
+            with Wire(file) as wire: wire.ready()
+        inactive(owner, sid)
+        with pytest.raises(RuntimeError): control(owner, 'watch', sessionId=sid)
+        with Wire(plain) as wire: wire.ready()
+
+
+def test_host_channel_payload_and_expiry_end_binding(tmp_path):
+    with service(tmp_path) as (_, owner, _):
+        for name, ttl, payload in [('payload', 60, True), ('expiry', 1, False)]:
+            file = owner.parent / (name + '.json')
+            sid = create_session(owner, file, ttl=ttl, host_bound=True)['sessionId']
+            with watch(owner, sid) as host:
+                host.settimeout(4)
+                if payload: host.sendall(b'x')
+                assert host.recv(1) == b''
+                inactive(owner, sid)
+            with pytest.raises(RuntimeError): attach(file)
+
+
+def test_observed_host_disconnect_revokes_before_waiting_for_service_registry(tmp_path):
+    with service(tmp_path) as (svc, owner, _):
+        file = owner.parent / 'bound.json'
+        sid = create_session(owner, file, host_bound=True)['sessionId']
+        with watch(owner, sid) as host:
+            with svc.lock:
+                scope = svc.sessions[sid].scope
+                holder = object()
+                assert scope.reserve(holder)
+                host.shutdown(socket.SHUT_RDWR)
+                deadline = time.monotonic() + 2
+                while scope.valid() and time.monotonic() < deadline:
+                    time.sleep(.01)
+                assert not scope.valid()
+                with scope.dispatch(holder) as allowed:
+                    assert not allowed
+            inactive(owner, sid)
+
+
+@pytest.mark.parametrize('ending', ['stdin_eof', 'stdin_data', 'watcher_kill'])
+def test_watcher_cli_lifetime_revokes_pending_authority(tmp_path, ending):
+    with service(tmp_path) as (_, owner, _):
+        file = owner.parent / 'bound.json'
+        sid = create_session(owner, file, host_bound=True)['sessionId']
+        proc = subprocess.Popen([sys.executable, '-m', 'llms_ink.guard', 'session-watch', '--owner-file', str(owner), '--session-id', sid],
+                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            import select
+            assert select.select([proc.stdout], [], [], 5)[0]
+            assert json.loads(proc.stdout.readline()) == {'ok': True, 'sessionId': sid}
+            with Wire(file) as wire:
+                wire.ready(); wire.call()
+                if ending == 'stdin_eof': proc.stdin.close()
+                elif ending == 'stdin_data': proc.stdin.write(b'x'); proc.stdin.flush()
+                else: proc.kill()
+                assert proc.wait(timeout=5) == (-9 if ending == 'watcher_kill' else 0)
+                inactive(owner, sid)
+                assert wire.stream.readline() == b''
+                assert not effects(tmp_path, 'mail')
+        finally:
+            if proc.poll() is None: proc.kill(); proc.wait(timeout=5)
+            for stream in [proc.stdin, proc.stdout, proc.stderr]: stream.close()
+
+
 class Wire:
     def __init__(self,path):
         self.protocol=read_credential(path)['protocol'];self.sock,self.stream=attach(path)

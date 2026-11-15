@@ -32,6 +32,7 @@ CONTROL_BYTES = 8192
 MAX_SESSIONS = 16
 MAX_CONNECTIONS = 8
 MAX_SESSION_CONNECTIONS = 4
+MAX_HANDLERS = MAX_SESSIONS + MAX_CONNECTIONS + 16
 TOKEN = re.compile(r'^[a-f0-9]{64}$')
 SESSION_ID = re.compile(r'^[a-f0-9]{32}$')
 REJECTED = {'ok': False, 'error': 'Guard service rejected the request.'}
@@ -159,13 +160,18 @@ def control(owner_file, operation, **params):
     return result
 
 
-def create_session(owner_file, output, protocol='legacy', ttl=3600):
+def create_session(owner_file, output, protocol='legacy', ttl=3600, *, host_bound=False):
     # Validate destination before minting a capability. A failed exclusive write
     # revokes the new session, preserving the caller's existing file.
     private_directory(Path(output).absolute().parent)
     if os.path.lexists(output):
         raise ValueError('Output already exists')
-    result = control(owner_file, 'create', protocol=protocol, ttl=ttl)
+    if type(host_bound) is not bool:
+        raise ValueError('Invalid host binding')
+    params = {'protocol': protocol, 'ttl': ttl}
+    if host_bound:
+        params['hostBound'] = True
+    result = control(owner_file, 'create', **params)
     grant = result['credential']
     try:
         write_private(output, grant)
@@ -174,6 +180,25 @@ def create_session(owner_file, output, protocol='legacy', ttl=3600):
         except Exception: pass
         raise
     return {'sessionId': grant['sessionId'], 'expiresAt': grant['expiresAt']}
+
+
+def watch_session(owner_file, session_id, stdin, stdout):
+    """Keep a host-bound session alive only while this owner channel and input live.
+
+    The host owns the input pipe. EOF, any input, watcher death or service EOF
+    ends the binding. This command never renews TTL or reconnects a session.
+    """
+    credential = read_credential(owner_file, 'owner')
+    with open_socket(credential) as sock, sock.makefile('rb', buffering=0) as stream:
+        send(sock, {'op': 'watch', 'token': credential['token'], 'sessionId': session_id})
+        if frame(stream) != {'ok': True, 'sessionId': session_id}:
+            raise RuntimeError('Guard service rejected the host binding.')
+        stdout.write(json.dumps({'ok': True, 'sessionId': session_id}).encode() + b'\n')
+        stdout.flush()
+        # Bytes are not a heartbeat protocol. The pipe is deliberately idle;
+        # readability means EOF or unexpected data, both of which end the lease.
+        select.select([stdin.fileno(), sock.fileno()], [], [])
+    return 0
 
 
 def attach(session_file):
@@ -249,6 +274,8 @@ class Session:
     scope: SessionScope
     connections: dict = field(default_factory=dict)
     counts: dict = field(default_factory=dict)
+    host_bound: bool = False
+    watcher: object = None
 
 
 class Service:
@@ -262,7 +289,7 @@ class Service:
         self.sessions = {}
         self.lock = threading.RLock()
         self.stop = threading.Event()
-        self.slots = threading.BoundedSemaphore(16)
+        self.slots = threading.BoundedSemaphore(MAX_HANDLERS)
         self.handlers = set()
         self.sockets = set()
         self.listener = None
@@ -285,6 +312,9 @@ class Service:
 
     def _revoke(self, session):
         session.scope.revoke()
+        if session.watcher is not None:
+            try: session.watcher.shutdown(socket.SHUT_RDWR)
+            except OSError: pass
         for sock, proxy in list(session.connections.items()):
             proxy.stop.set()
             proxy.client_disconnected.set()
@@ -294,6 +324,7 @@ class Service:
     def _handle(self, sock):
         session = None
         attached = False
+        watched = False
         try:
             sock.settimeout(3)
             with sock.makefile('rb', buffering=0) as incoming:
@@ -306,6 +337,7 @@ class Service:
                     with self.lock:
                         session = self.sessions.get(request['sessionId']) if type(request['sessionId']) is str else None
                         if (session is None or not secrets.compare_digest(digest, session.token_hash) or not session.scope.valid()
+                                or (session.host_bound and session.watcher is None)
                                 or len(session.connections) >= MAX_SESSION_CONNECTIONS
                                 or sum(len(s.connections) for s in self.sessions.values()) >= MAX_CONNECTIONS or self.stop.is_set()):
                             raise ValueError('Session unavailable')
@@ -326,15 +358,34 @@ class Service:
                 digest = self.token_hash(request.get('token'))
                 if not secrets.compare_digest(digest, self.token_hash(self.owner['token'])):
                     raise ValueError('Owner authentication failed')
+                if op == 'watch':
+                    if set(request) != {'op', 'token', 'sessionId'}:
+                        raise ValueError('Invalid host binding')
+                    with self.lock:
+                        target = self.sessions.get(request['sessionId']) if type(request['sessionId']) is str else None
+                        if (self.stop.is_set() or target is None or not target.scope.valid()
+                                or not target.host_bound or target.watcher is not None):
+                            raise ValueError('Host binding unavailable')
+                        session = target
+                        session.watcher = sock
+                        watched = True
+                        send(sock, {'ok': True, 'sessionId': session.id})
+                    sock.settimeout(None)
+                    # No payload is accepted after authentication. EOF, any byte
+                    # or a socket failure revokes at the same dispatch lock as
+                    # owner revocation. No replacement watcher is permitted.
+                    sock.recv(1)
+                    return
                 with self.lock:
                     if self.stop.is_set():
                         raise ValueError('Service stopped')
-                    if op == 'create' and set(request) == {'op', 'token', 'protocol', 'ttl'}:
+                    if op == 'create' and set(request) in ({'op', 'token', 'protocol', 'ttl'}, {'op', 'token', 'protocol', 'ttl', 'hostBound'}):
                         ttl = request['ttl']; protocol = request['protocol']
-                        if type(ttl) is not int or not 1 <= ttl <= 86400 or protocol not in {'legacy', '2026-07-28'} or len(self.sessions) >= MAX_SESSIONS:
+                        host_bound = request.get('hostBound', False)
+                        if type(host_bound) is not bool or type(ttl) is not int or not 1 <= ttl <= 86400 or protocol not in {'legacy', '2026-07-28'} or len(self.sessions) >= MAX_SESSIONS:
                             raise ValueError('Invalid session parameters')
                         token = secrets.token_hex(32); sid = secrets.token_hex(16)
-                        session = Session(sid, self.token_hash(token), protocol, int(time.time()) + ttl, SessionScope(time.monotonic() + ttl))
+                        session = Session(sid, self.token_hash(token), protocol, int(time.time()) + ttl, SessionScope(time.monotonic() + ttl), host_bound=host_bound)
                         self.sessions[sid] = session
                         grant = {'version': 1, 'role': 'session', 'socket': self.owner['socket'], 'token': token,
                                  'sessionId': sid, 'protocol': protocol, 'policySha256': self.config.sha256, 'expiresAt': session.expires_at}
@@ -351,18 +402,26 @@ class Service:
                         for s in self.sessions.values():
                             with s.scope.lock:
                                 states.append({'sessionId': s.id, 'active': s.scope.valid(), 'expiresAt': s.expires_at,
+                                               'hostBound': s.host_bound, 'hostConnected': s.watcher is not None and s.scope.valid(),
                                                'connections': len(s.connections), 'approvalPending': s.scope.holder is not None,
                                                'decisions': dict(s.counts)})
                         send(sock, {'ok': True, 'policySha256': self.config.sha256, 'sessions': states})
                     else:
                         raise ValueError('Invalid control operation')
         except (ValueError, TypeError, KeyError, OSError, RuntimeError, RecursionError):
-            if not attached:
+            if not attached and not watched:
                 try: send(sock, REJECTED)
                 except OSError: pass
             self.log({'event': 'service_request_rejected'})
         finally:
+            # Invalidate authority before waiting for the service's connection
+            # registry lock, which another control request may currently hold.
+            if watched:
+                session.scope.revoke()
             with self.lock:
+                if watched:
+                    self._revoke(session)
+                    self.log({'event': 'host_disconnected'})
                 if session is not None:
                     session.connections.pop(sock, None)
                 self.sockets.discard(sock)

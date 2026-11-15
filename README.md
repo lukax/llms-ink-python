@@ -343,6 +343,10 @@ llms-ink-guard connect --session-file "$HOME/.llms-ink-guard/session.json"
 
 `connect` is the stdio MCP command for that conversation. It loads no model locally and never receives the owner secret. For modern clients, pass `--client-protocol 2026-07-28` to `session-create`. The service pins its server configuration at startup; session credentials cannot choose commands, change permissions, approve peer connections or call owner operations. Each connection launches its own configured upstream processes, while sharing the model and session approval queue.
 
+Python 0.14.0 adds an optional host lifetime binding. Pass `--host-bound` when creating the session. Before any attachment, the trusted host must start `session-watch --owner-file FILE --session-id ID` with a private stdin pipe, wait for its metadata-only ready response, and keep the pipe open without writing. EOF or any input ends the watcher. The service revokes the session on observed watcher disconnection and refuses replacement watchers. Session credentials cannot establish this owner binding. The JavaScript 0.8.0 Claude adapter manages this sequence automatically; older service versions fail closed rather than creating an unbound fallback.
+
+The fixed TTL still applies. A stopped process, inherited pipe or delayed OS scheduling can delay disconnect observation; this is not a heartbeat or crash-proof lease. Pending approvals are invalidated, but already dispatched effects cannot be undone. Ordinary connector disconnects leave a healthy owner binding intact. Status adds `hostBound` and `hostConnected`; `active` alone does not mean a bound session is ready to attach.
+
 The owner can inspect metadata and revoke a session using the non-secret ID printed by creation:
 
 ```sh
@@ -430,7 +434,7 @@ llms-ink-guard service-serve --owner-file "$HOME/.ink-offline-service/owner.json
   --config "$HOME/.ink-offline-permissions/gateway.json"
 ```
 
-Use the existing [Claude host setup](https://llms.ink/guard/start/) with this new owner-file path and the Python environment containing 0.13.0. The example request is `local__text_stats` with `{"text":"Hello world."}`. It returns 12 characters, 2 words and 1 line. A different text needs its own reviewed exact permission. Per-call approval remains required.
+Use the existing [Claude host setup](https://llms.ink/guard/start/) with this new owner-file path and the Python environment containing 0.14.0+. The example request is `local__text_stats` with `{"text":"Hello world."}`. It returns 12 characters, 2 words and 1 line. A different text needs its own reviewed exact permission. Per-call approval remains required.
 
 The five-minute deadline is fixed at process start; it does not renew on tool calls. Expiry closes that connection. Start a fresh reviewed connection when needed, without replaying an action whose outcome is uncertain. EOF on the runtime's stdin closes the connection, including a server that ignores EOF. Keep stdin open while awaiting MCP responses.
 

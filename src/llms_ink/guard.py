@@ -278,6 +278,10 @@ def main(argv: list[str] | None = None) -> int:
     session_create.add_argument('--output', required=True)
     session_create.add_argument('--client-protocol', choices=['legacy', '2026-07-28'], default='legacy')
     session_create.add_argument('--ttl', type=int, default=3600, help='Session lifetime in seconds, from 1 to 86400.')
+    session_create.add_argument('--host-bound', action='store_true', help='Refuse attachments until an owner watcher connects; revoke when that watcher disconnects.')
+    session_watch = commands.add_parser('session-watch', help='Bind a host-bound session to this owner process and its idle stdin pipe; EOF revokes it.')
+    session_watch.add_argument('--owner-file', required=True)
+    session_watch.add_argument('--session-id', required=True)
     session_revoke = commands.add_parser('session-revoke', help='Revoke a session and stop all its guarded connections.')
     session_revoke.add_argument('--owner-file', required=True)
     session_revoke.add_argument('--session-id', required=True)
@@ -335,7 +339,7 @@ def main(argv: list[str] | None = None) -> int:
                 return guard_review.review(args.config, args.proposal, args.output, sys.stdin, sys.stdout)
             except (OSError, ValueError, TypeError, RecursionError):
                 raise RuntimeError('Permission review failed. Check the owner-controlled inputs, unchanged base configuration, complete review size and new output path in a private directory. No existing scope was changed.') from None
-        if args.action in {'service-init', 'service-serve', 'service-status', 'session-create', 'session-revoke', 'connect'}:
+        if args.action in {'service-init', 'service-serve', 'service-status', 'session-create', 'session-revoke', 'session-watch', 'connect'}:
             if os.name != 'posix':
                 raise RuntimeError('The local session service requires macOS or Linux.')
             from . import guard_service
@@ -344,8 +348,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps({'initialized': True}))
                 return 0
             if args.action == 'session-create':
-                print(json.dumps(guard_service.create_session(args.owner_file, args.output, args.client_protocol, args.ttl)))
+                print(json.dumps(guard_service.create_session(args.owner_file, args.output, args.client_protocol, args.ttl, host_bound=args.host_bound)))
                 return 0
+            if args.action == 'session-watch':
+                return guard_service.watch_session(args.owner_file, args.session_id, sys.stdin.buffer, sys.stdout.buffer)
             if args.action == 'session-revoke':
                 print(json.dumps(guard_service.control(args.owner_file, 'revoke', sessionId=args.session_id)))
                 return 0
