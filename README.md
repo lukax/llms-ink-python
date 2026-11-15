@@ -375,3 +375,11 @@ llms-ink-guard gateway-review --config /absolute/path/to/gateway.json \
 Replace the illustrative server/tool and paths. A proposal cannot be loaded as a gateway configuration. Review shows the complete command, definition, existing grants and proposed addition as escaped JSON, plus the candidate fingerprint and destination. Only the fresh displayed challenge, typed within 120 seconds in an owner terminal, accepts. Enter, EOF, timeout, interruption, changed inputs or an existing output path refuse publication. No `--yes` or piped acceptance is supported. Reviews over 32 KiB are refused whole.
 
 Acceptance writes a new mode-0600 configuration in an owner-only directory, without editing the base or starting a server/model. The owner must explicitly start a new gateway or service with that file; running scopes remain unchanged and action approval is still required. An interrupted successful publication can leave the complete new file: inspect the destination before retrying. This does not add tools/servers, infer task intent, validate all JSON Schema semantics, prove human presence or isolate malicious same-user code. [Workflow and boundary](https://llms.ink/guard/review/).
+
+## Guided first session (experimental, 0.12.0)
+
+Use `llms-ink-guard gateway-init --server NAME --output NEW_FILE -- /absolute/executable arguments` in an owner terminal. It asks before starting the server, discovers tools without calling them, stops discovery, and lets you select tools and exact argument JSON files. A separate complete review writes a new private configuration; existing files and running scopes are unchanged. Launching a server can have startup side effects and is not sandboxed.
+
+Run `llms-ink-guard doctor --config FILE` before starting the service. Add `--owner-file FILE` to compare the running service's pinned configuration, or `--json` for structured results. These are read-only local checks: no inference, server startup, downloads or session changes. Passing does not verify host connection, human presence or protection.
+
+[Complete Claude first-session setup](https://llms.ink/guard/start/) includes installation, a synthetic text check, owner review, diagnostics, service startup and the existing JavaScript terminal host.

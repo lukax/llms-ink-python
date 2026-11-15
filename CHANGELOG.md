@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.0 — 2026-11-14
+
+- Add terminal `gateway-init`: explicitly approve launching one stdio server, discover its tools without calling them, stop the discovery group, select exact argument files, then review and exclusively publish a new private configuration. Launch and permission approval use separate fresh challenges.
+- Add read-only `doctor` with human/JSON output for dependencies, pinned model files, configuration, executable availability and optional running-service digest comparison. It reports unverified host coverage explicitly and never starts a model/server, downloads assets or changes sessions.
+- Keep terminal waits interruptible with bounded polling and nonblocking reads, restoring descriptor flags on exit. This also applies to existing permission reviews.
+- Preserve immutable running scopes, separate per-call approval and existing model/inspection policy. Guided setup is not process isolation or an automatic desktop integration.
+
 ## 0.11.1 — 2026-11-14
 
 - Serialize local model cleanup when inspection failure and service shutdown overlap. Force-stop and reap stopped workers within the same lifecycle lock; close the pipe even if cleanup fails.

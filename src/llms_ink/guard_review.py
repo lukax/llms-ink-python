@@ -126,18 +126,29 @@ def propose(config, server, tool, arguments, output):
     return {'proposed':True, 'active':False, 'baseSha256':hashlib.sha256(base.raw).hexdigest()}
 
 
-def terminal_answer(stream, deadline):
+def terminal_answer(stream, deadline, limit=128, encoding='ascii'):
     raw = bytearray()
-    while len(raw) < 128:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0 or not select.select([stream.fileno()], [], [], remaining)[0]: return None
-        byte = os.read(stream.fileno(), 1)
-        if not byte: return None
-        if byte == b'\n':
-            try: return raw.decode('ascii')
-            except UnicodeError: return None
-        raw.extend(byte)
-    return None
+    fd = stream.fileno()
+    was_blocking = os.get_blocking(fd)
+    try:
+        os.set_blocking(fd, False)
+        while len(raw) < limit:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0: return None
+            # Short waits also observe pending Python interrupts on platforms
+            # that defer syscall interruption. A readiness/terminal-flush race
+            # must not turn the following read into an unbounded blocking call.
+            if not select.select([fd], [], [], min(remaining, .1))[0]: continue
+            try: byte = os.read(fd, 1)
+            except BlockingIOError: continue
+            if not byte: return None
+            if byte == b'\n':
+                try: return raw.decode(encoding)
+                except UnicodeError: return None
+            raw.extend(byte)
+        return None
+    finally:
+        os.set_blocking(fd, was_blocking)
 
 
 def review(config, proposal, output, input_stream, output_stream):

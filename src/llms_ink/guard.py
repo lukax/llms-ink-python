@@ -239,6 +239,14 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("tool-hash", help="Hash one reviewed tools/list tool object from stdin; no model or server needed.")
     check = commands.add_parser("policy-check", help="Validate a local permission file; no model or server needed.")
     check.add_argument("path")
+    doctor = commands.add_parser('doctor', help='Read-only installation, configuration and optional service checks; starts no model or server.')
+    doctor.add_argument('--config', required=True)
+    doctor.add_argument('--owner-file')
+    doctor.add_argument('--json', action='store_true', help='Emit structured diagnostic results without arguments or credentials.')
+    initialize_gateway = commands.add_parser('gateway-init', help='Owner-terminal discovery and initial exact permissions; asks before launching the server.')
+    initialize_gateway.add_argument('--server', required=True)
+    initialize_gateway.add_argument('--output', required=True)
+    initialize_gateway.add_argument('command', nargs=argparse.REMAINDER, help='-- /absolute/server-executable arguments')
     gateway_check = commands.add_parser("gateway-check", help="Validate a reviewed multi-server configuration without starting a model or server.")
     gateway_check.add_argument("path")
     proposal = commands.add_parser('gateway-propose', help='Propose one exact argument object for an existing tool; does not grant authority or start a server.')
@@ -282,6 +290,23 @@ def main(argv: list[str] | None = None) -> int:
     startup = [True, False]
     service = None
     try:
+        if args.action == 'doctor':
+            if os.name != 'posix': raise RuntimeError('Local guard diagnostics require macOS or Linux.')
+            from .guard_doctor import diagnose, render
+            report = diagnose(args.config, args.owner_file)
+            print(json.dumps(report, ensure_ascii=True) if args.json else render(report))
+            return 0 if report['checksPassed'] else 2
+        if args.action == 'gateway-init':
+            if os.name != 'posix': raise RuntimeError('Guided setup requires macOS or Linux.')
+            import signal
+            def setup_stop(_signal, _frame): raise KeyboardInterrupt
+            old_signals[signal.SIGTERM] = signal.signal(signal.SIGTERM, setup_stop)
+            from .guard_onboarding import initialize
+            command = args.command[1:] if args.command[:1] == ['--'] else args.command
+            try:
+                return initialize(args.server, command, args.output, sys.stdin, sys.stdout)
+            except (OSError, ValueError, TypeError, RuntimeError, RecursionError):
+                raise RuntimeError('Guided setup failed. Check the reviewed command, legacy tool discovery, exact argument files and new output path in a private directory. No existing configuration was changed.') from None
         if args.action in {'gateway-propose', 'gateway-review'}:
             if os.name != 'posix': raise RuntimeError('Owner terminal review requires macOS or Linux.')
             from . import guard_review

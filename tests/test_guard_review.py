@@ -284,3 +284,26 @@ def test_proposal_cannot_add_servers_tools_or_other_configuration_fields(tmp_pat
     base,_,_,proposal,_=prepared(tmp_path)
     data=json.loads(proposal.read_text());data[field]=value
     with pytest.raises(ValueError):review.prepare(base.read_bytes(),json.dumps(data).encode())
+
+
+def test_terminal_wait_keeps_deadline_and_restores_descriptor_after_idle_or_interrupt(monkeypatch):
+    import pty
+    master,slave=pty.openpty()
+    with os.fdopen(os.dup(slave),'r') as stream:
+        def answer_later():
+            time.sleep(.25);os.write(master,b'approve\n')
+        writer=threading.Thread(target=answer_later);writer.start()
+        try:
+            started=time.monotonic()
+            assert review.terminal_answer(stream,started+2)=='approve'
+            assert time.monotonic()-started>=.2 and os.get_blocking(stream.fileno())
+            assert review.terminal_answer(stream,time.monotonic()+.15) is None
+            assert os.get_blocking(stream.fileno())
+            def interrupt(*args):raise KeyboardInterrupt
+            monkeypatch.setattr(review.select,'select',interrupt)
+            with pytest.raises(KeyboardInterrupt):review.terminal_answer(stream,time.monotonic()+2)
+            assert os.get_blocking(stream.fileno())
+            os.set_blocking(stream.fileno(),False)
+            with pytest.raises(KeyboardInterrupt):review.terminal_answer(stream,time.monotonic()+2)
+            assert not os.get_blocking(stream.fileno())
+        finally:writer.join(timeout=2);os.close(master);os.close(slave)
