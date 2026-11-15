@@ -330,15 +330,15 @@ For host integrations that can control conversation lifecycle, one foreground se
 The service requires macOS/Linux and Python 3.11+. First review the [gateway configuration](https://llms.ink/guard/gateway/), then create a private directory outside agent access:
 
 ```sh
-llms-ink-guard service-init "$HOME/.llms-ink-guard"
-llms-ink-guard service-serve --owner-file "$HOME/.llms-ink-guard/owner.json" --config /absolute/path/to/gateway.json
+llms-ink-guard service-init "$HOME/.ink-service" &&
+llms-ink-guard service-serve --owner-file "$HOME/.ink-service/owner.json" --config /absolute/path/to/gateway.json
 ```
 
 Keep the service running. From the trusted host/control process, issue a session into a new file in a private directory:
 
 ```sh
-llms-ink-guard session-create --owner-file "$HOME/.llms-ink-guard/owner.json" --output "$HOME/.llms-ink-guard/session.json"
-llms-ink-guard connect --session-file "$HOME/.llms-ink-guard/session.json"
+llms-ink-guard session-create --owner-file "$HOME/.ink-service/owner.json" --output "$HOME/.ink-service/session.json" &&
+llms-ink-guard connect --session-file "$HOME/.ink-service/session.json"
 ```
 
 `connect` is the stdio MCP command for that conversation. It loads no model locally and never receives the owner secret. For modern clients, pass `--client-protocol 2026-07-28` to `session-create`. The service pins its server configuration at startup; session credentials cannot choose commands, change permissions, approve peer connections or call owner operations. Each connection launches its own configured upstream processes, while sharing the model and session approval queue.
@@ -350,8 +350,8 @@ The fixed TTL still applies. A stopped process, inherited pipe or delayed OS sch
 The owner can inspect metadata and revoke a session using the non-secret ID printed by creation:
 
 ```sh
-llms-ink-guard service-status --owner-file "$HOME/.llms-ink-guard/owner.json"
-llms-ink-guard session-revoke --owner-file "$HOME/.llms-ink-guard/owner.json" --session-id SESSION_ID
+llms-ink-guard service-status --owner-file "$HOME/.ink-service/owner.json"
+llms-ink-guard session-revoke --owner-file "$HOME/.ink-service/owner.json" --session-id SESSION_ID
 ```
 
 Sessions default to one hour (`--ttl`, maximum 86,400 seconds). Limits are 16 live sessions, eight attached connections overall and four per session. Authentication frames are bounded to 8 KiB and three seconds; writes have five-second deadlines. Model access is serialized; waiting more than one second for it yields an unscanned result that is withheld. Status reports counters, never content. There is no disk audit or exposure history.
