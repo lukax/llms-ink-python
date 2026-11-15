@@ -322,3 +322,36 @@ The client uses `server/discover` and per-request protocol metadata instead of `
 A permitted call returns `resultType: "input_required"`, an unchecked approval form under `inputRequests.approval`, and an opaque `requestState`. After review, the client repeats the same tool and arguments with a new JSON-RPC ID, that state, and `inputResponses.approval`. The state is a random handle to an immutable action held in this process. It expires after 60 seconds, is consumed at most once, and cannot move to another connection or authorize changed arguments. It contains no serialized tool arguments or credentials.
 
 The adapter inspects the result after dispatch and returns `resultType: "complete"`. Upstream continuation fields cannot create approval forms. Client identity metadata is self-reported and never grants authority. The official Go MCP SDK interoperability test uses inert fixture effects and automated decisions; it does not establish full human-review rendering in a desktop host. This adapter does not add modern upstream servers, HTTP, a shared session service or persistent exposure state.
+
+## Shared local sessions (experimental, 0.10.0)
+
+For host integrations that can control conversation lifecycle, one foreground service can share local inference across authenticated sessions. Each session has its own approval queue and can attach several guarded connections. A host must issue a separate session for each independent conversation; neither a working directory nor MCP metadata establishes identity. Existing desktop clients need a lifecycle adapter to do this automatically.
+
+The service requires macOS/Linux and Python 3.11+. First review the [gateway configuration](https://llms.ink/guard/gateway/), then create a private directory outside agent access:
+
+```sh
+llms-ink-guard service-init "$HOME/.llms-ink-guard"
+llms-ink-guard service-serve --owner-file "$HOME/.llms-ink-guard/owner.json" --config /absolute/path/to/gateway.json
+```
+
+Keep the service running. From the trusted host/control process, issue a session into a new file in a private directory:
+
+```sh
+llms-ink-guard session-create --owner-file "$HOME/.llms-ink-guard/owner.json" --output "$HOME/.llms-ink-guard/session.json"
+llms-ink-guard connect --session-file "$HOME/.llms-ink-guard/session.json"
+```
+
+`connect` is the stdio MCP command for that conversation. It loads no model locally and never receives the owner secret. For modern clients, pass `--client-protocol 2026-07-28` to `session-create`. The service pins its server configuration at startup; session credentials cannot choose commands, change permissions, approve peer connections or call owner operations. Each connection launches its own configured upstream processes, while sharing the model and session approval queue.
+
+The owner can inspect metadata and revoke a session using the non-secret ID printed by creation:
+
+```sh
+llms-ink-guard service-status --owner-file "$HOME/.llms-ink-guard/owner.json"
+llms-ink-guard session-revoke --owner-file "$HOME/.llms-ink-guard/owner.json" --session-id SESSION_ID
+```
+
+Sessions default to one hour (`--ttl`, maximum 86,400 seconds). Limits are 16 live sessions, eight attached connections overall and four per session. Authentication frames are bounded to 8 KiB and three seconds; writes have five-second deadlines. Model access is serialized; waiting more than one second for it yields an unscanned result that is withheld. Status reports counters, never content. There is no disk audit or exposure history.
+
+Revocation, expiry and upstream transport failure invalidate held calls across the session. Cancellation and authority are checked immediately before the first dispatch byte, including after a pipe stalls. A dispatched effect cannot be undone. Restarting the service invalidates all old session capabilities; it is not evidence that a host removed prior context. A normal stop removes its own socket. After an unclean crash, use a new private service directory and reissue sessions. Existing sockets and credential files are never silently replaced.
+
+**Trust boundary:** file/socket permissions do not isolate malicious code running as the same OS user. Keep the owner credential outside agent/upstream access through a trusted execution boundary. This does not sandbox servers, native shell/file tools, or a compromised host. Approval responses still trust the host and do not prove a person reviewed them. The service exposes no HTTP listener, team account, billing or automatic chat detection. [Setup and limits](https://llms.ink/guard/service/).

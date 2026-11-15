@@ -229,6 +229,23 @@ def main(argv: list[str] | None = None) -> int:
     gateway = commands.add_parser("gateway", help="Guard several legacy stdio servers with exact permissions and one-use host approvals (POSIX, experimental).")
     gateway.add_argument("--config", required=True, help="Owner-controlled JSON server definitions and exact arguments.")
     gateway.add_argument("--client-protocol", choices=['legacy', '2026-07-28'], default='legacy', help="Client protocol; upstream servers remain legacy stdio. Modern calls use one-use approval continuations.")
+    service_init = commands.add_parser('service-init', help='Create a private local service directory and owner credential (POSIX).')
+    service_init.add_argument('directory')
+    service_serve = commands.add_parser('service-serve', help='Run the authenticated local session service in the foreground (POSIX).')
+    service_serve.add_argument('--owner-file', required=True)
+    service_serve.add_argument('--config', required=True)
+    session_create = commands.add_parser('session-create', help='Issue a session credential into a new private file; never print its secret.')
+    session_create.add_argument('--owner-file', required=True)
+    session_create.add_argument('--output', required=True)
+    session_create.add_argument('--client-protocol', choices=['legacy', '2026-07-28'], default='legacy')
+    session_create.add_argument('--ttl', type=int, default=3600, help='Session lifetime in seconds, from 1 to 86400.')
+    session_revoke = commands.add_parser('session-revoke', help='Revoke a session and stop all its guarded connections.')
+    session_revoke.add_argument('--owner-file', required=True)
+    session_revoke.add_argument('--session-id', required=True)
+    service_status = commands.add_parser('service-status', help='Read metadata-only session status using the owner credential.')
+    service_status.add_argument('--owner-file', required=True)
+    session_connect = commands.add_parser('connect', help='Attach this stdio host connection using a session credential file.')
+    session_connect.add_argument('--session-file', required=True)
     wrap = commands.add_parser("wrap", help="Guard a legacy stdio MCP tool server.")
     wrap.add_argument("--policy", help="Owner-controlled JSON permissions. Deny calls without an exact matching rule.")
     wrap.add_argument("--require-approval", action="store_true", help="Require a one-use host form approval for each policy-permitted call (experimental).")
@@ -238,7 +255,28 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("The optional guard requires Python 3.11 or newer.")
     old_signals = {}
     startup = [True, False]
+    service = None
     try:
+        if args.action in {'service-init', 'service-serve', 'service-status', 'session-create', 'session-revoke', 'connect'}:
+            if os.name != 'posix':
+                raise RuntimeError('The local session service requires macOS or Linux.')
+            from . import guard_service
+            if args.action == 'service-init':
+                guard_service.initialize(args.directory)
+                print(json.dumps({'initialized': True}))
+                return 0
+            if args.action == 'session-create':
+                print(json.dumps(guard_service.create_session(args.owner_file, args.output, args.client_protocol, args.ttl)))
+                return 0
+            if args.action == 'session-revoke':
+                print(json.dumps(guard_service.control(args.owner_file, 'revoke', sessionId=args.session_id)))
+                return 0
+            if args.action == 'service-status':
+                print(json.dumps(guard_service.control(args.owner_file, 'status')))
+                return 0
+            if args.action == 'connect':
+                return guard_service.connect(args.session_file, sys.stdin.buffer, sys.stdout.buffer)
+            service = guard_service.Service(args.owner_file, args.config, None)
         if args.action == "gateway-check":
             from .guard_gateway_config import GatewayConfig
             config = GatewayConfig.load(args.path)
@@ -269,17 +307,20 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         policy = None
         config = None
-        if args.action == "gateway":
+        if args.action in {'gateway', 'service-serve'}:
             if os.name != "posix":
                 raise RuntimeError("The experimental aggregate gateway requires POSIX process-group cleanup.")
-            from .guard_gateway_config import GatewayConfig
-            config = GatewayConfig.load(args.config)
-            command = config.command(args.config)
-            policy = config.outer_policy(command)
+            if args.action == 'gateway':
+                from .guard_gateway_config import GatewayConfig
+                config = GatewayConfig.load(args.config)
+                command = config.command(args.config)
+                policy = config.outer_policy(command)
             import signal
             def gateway_stop(_signal, _frame):
                 if startup[0]:
                     startup[1] = True  # Let bounded model startup finish so its worker can be closed.
+                elif service is not None:
+                    service.stop.set()
                 else:
                     raise KeyboardInterrupt
             for sig in (signal.SIGTERM, signal.SIGINT):
@@ -298,6 +339,9 @@ def main(argv: list[str] | None = None) -> int:
         try:
             startup[0] = False
             if startup[1]: raise KeyboardInterrupt
+            if service is not None:
+                service.guard.guard = guard
+                return service.run()
             if args.action == "scan":
                 raw = sys.stdin.buffer.read(MAX_BYTES + 1)
                 if len(raw) > MAX_BYTES:

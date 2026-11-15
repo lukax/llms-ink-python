@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.0 — 2026-11-14
+
+- Add an experimental authenticated local session service over private Unix sockets. Owner credentials issue/revoke session capabilities; session credentials can only attach MCP connections. Credentials stay in exclusive owner-only files and never enter tool requests or upstream command arguments.
+- Share one local model and one approval queue per explicitly issued session. Separate sessions remain isolated; exact permissions and fresh host approval remain mandatory for every call. Support legacy and modern client modes.
+- Recheck session authority, approval expiry and cancellation immediately before the first nonblocking dispatch byte. Revoke all session connections on expiry, owner revocation or an observed upstream transport failure. Bound socket authentication, concurrency and stalled writes.
+- Add metadata-only session status, restart invalidation, owned-process cleanup and stopped-model shutdown checks. This is not automatic desktop-chat identification, persistent exposure state, a same-user process sandbox or a hosted team service.
+
 ## 0.9.0 — 2026-11-14
 
 - Add explicit `gateway --client-protocol 2026-07-28` for modern stdio clients, with per-request metadata, server discovery and MRTR form approvals. The configured upstream servers still use MCP 2025-11-25.

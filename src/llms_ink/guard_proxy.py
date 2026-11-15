@@ -16,11 +16,12 @@ import signal
 import sys
 import threading
 import time
+from contextlib import contextmanager
 from typing import Any, BinaryIO
 from types import MappingProxyType
 
 from .guard import MAX_BYTES, receipt
-from .guard_transport import lines
+from .guard_transport import ClientDisconnected, ClientWriter, lines
 from .guard_policy import Policy, decode, tool_digest
 from .guard_approval import Approval, APPROVAL_SECONDS, APPROVAL_VERSIONS, accepted, supports_approval
 
@@ -108,12 +109,15 @@ def supported_result(method: str, body: Any) -> bool:
 
 
 class Proxy:
-    def __init__(self, command: list[str], guard: Any, *, policy: Policy | None = None, require_approval: bool = False, approval_timeout: float = APPROVAL_SECONDS, request_timeout: float = 120, log: Any = None, review_commands: dict | None = None, process_group: bool = False):
+    def __init__(self, command: list[str], guard: Any, *, policy: Policy | None = None, require_approval: bool = False, approval_timeout: float = APPROVAL_SECONDS, request_timeout: float = 120, log: Any = None, review_commands: dict | None = None, process_group: bool = False, approval_scope: Any = None):
         self.command, self.guard = list(command), guard
         self.policy = policy
         if process_group and os.name != 'posix':
             raise RuntimeError('Aggregate gateway process cleanup requires POSIX.')
         self.process_group = process_group
+        if approval_scope is not None and (policy is None or not require_approval or not process_group):
+            raise RuntimeError('Shared sessions require exact permissions, approval and owned process cleanup.')
+        self.approval_scope = approval_scope
         self.review_commands = MappingProxyType({name: tuple(command) for name, command in (review_commands or {}).items()})
         if require_approval and policy is None:
             raise RuntimeError("Host approval requires an owner-controlled exact tool policy.")
@@ -153,8 +157,14 @@ class Proxy:
                     self._event((source, raw))
             if not self.stop.is_set():
                 if source == "client": self.client_disconnected.set()
+                elif self.approval_scope is not None: self.approval_scope.revoke()
                 self._event((source, None))
-        except (OSError, ValueError):
+        except (OSError, ValueError) as failure:
+            if self.approval_scope is not None and source == 'client' and isinstance(failure, OSError):
+                self.client_disconnected.set()
+                self._event(('client', None))
+                return
+            if self.approval_scope is not None: self.approval_scope.revoke()
             self._event(("fatal", "transport_failure"))
 
     def _record_cancel(self, request_id: Any) -> None:
@@ -196,6 +206,7 @@ class Proxy:
                 if held is not None:
                     self.awaiting.pop(id_key(held.id))
                     self._cancel_form(held, output)
+                    self._release_approval()
                 self.pending.pop(key, None)
                 with self.state_lock:
                     self.cancelled.discard(key)
@@ -210,7 +221,7 @@ class Proxy:
             raise ValueError("Request ids must be unique within a bounded connection")
         self.seen.add(key)
         with self.state_lock:
-            if key in self.cancelled:
+            if key in self.cancelled or (self.approval_scope is not None and self.client_disconnected.is_set()):
                 return
         if len(self.pending) + len(self.awaiting) >= MAX_PENDING:
             self._write(output, error(id, "Local guard is busy. Retry after pending requests finish."))
@@ -245,13 +256,14 @@ class Proxy:
                     return
                 msg = {**msg, "params": {"name": name, "arguments": arguments}}
                 if self.require_approval:
-                    if self.awaiting:
+                    if self.awaiting or (self.approval_scope is not None and not self.approval_scope.reserve(self)):
                         self._write(output, error(id, "Another call is awaiting approval. Retry after it finishes."))
                         return
                     try:
                         approval, prompt = Approval.create(msg, list(self.review_commands.get(name, self.command)), self.policy.sha256,
                                                            self.tools[name], time.monotonic(), self.approval_timeout)
                     except ValueError:
+                        self._release_approval()
                         self._write(output, error(id, "This call is too large for complete approval review. No call was sent."))
                         return
                     self.awaiting[id_key(approval.id)] = approval
@@ -270,6 +282,7 @@ class Proxy:
                               "params": {"requestId": approval.id, "reason": "Approval is no longer pending."}})
 
     def _deny_approval(self, approval: Approval, output: BinaryIO, reason: str) -> None:
+        self._release_approval()
         self.log({"outcome": "denied", "reason": reason})
         self._write(output, error(approval.call_id, "This call was not approved. No call was sent."))
 
@@ -280,10 +293,25 @@ class Proxy:
                 self._cancel_form(approval, output)
                 self._deny_approval(approval, output, "approval_expired")
 
+    def _release_approval(self) -> None:
+        if self.approval_scope is not None:
+            self.approval_scope.release(self)
+
     def _approval_response(self, msg: dict, child: Any, output: BinaryIO) -> None:
+        if id_key(msg.get('id')) not in self.awaiting:
+            return
+        try:
+            self._dispatch_approval(msg, child, output)
+        finally:
+            self._release_approval()
+
+    def _dispatch_approval(self, msg: dict, child: Any, output: BinaryIO) -> None:
         approval = self.awaiting.pop(id_key(msg.get("id")), None)
         if approval is None:
             return  # late, replayed or unsolicited replies never grant authority
+        if self.approval_scope is not None:
+            self._dispatch_shared(approval, msg, child, output)
+            return
         call_key = id_key(approval.call_id)
         with self.state_lock:
             if call_key in self.cancelled or self.client_disconnected.is_set():
@@ -306,6 +334,36 @@ class Proxy:
             self.pending[call_key] = {"id": approval.call_id, "method": "tools/call", "at": time.monotonic()}
             self._write(child.stdin, action)
             self.log({"event": "approval_accepted"})
+
+    def _dispatch_shared(self, approval, message, child, output):
+        from .guard_transport import DispatchRevoked
+        if not accepted(message):
+            self._deny_approval(approval, output, 'approval_declined')
+            return
+        action = parse(approval.action)
+        name, arguments = action['params']['name'], action['params']['arguments']
+        key = id_key(approval.call_id)
+
+        @contextmanager
+        def dispatch_guard():
+            # Waiting for pipe capacity must not hold the cancellation/revocation
+            # locks. Recheck immediately before the first nonblocking write.
+            with self.state_lock, self.approval_scope.dispatch(self) as active:
+                allowed = (active and not self.stop.is_set() and not self.client_disconnected.is_set()
+                           and key not in self.cancelled and time.monotonic() < approval.expires
+                           and not self.discovery_failed and self.tools.get(name) == approval.definition
+                           and self.policy is not None and self.policy.allows(name, approval.definition, arguments))
+                if allowed:
+                    self.pending[key] = {'id': approval.call_id, 'method': 'tools/call', 'at': time.monotonic()}
+                yield allowed
+
+        try:
+            child.stdin.write_checked(approval.action + b'\n', dispatch_guard)
+        except DispatchRevoked:
+            self.pending.pop(key, None)
+            self._deny_approval(approval, output, 'session_call_invalidated')
+            return
+        self.log({'event': 'approval_accepted'})
 
     def _server(self, raw: bytes, child: Any, output: BinaryIO) -> None:
         msg = parse(raw)
@@ -337,7 +395,7 @@ class Proxy:
             except Exception:
                 result = receipt("unscanned", "model_unavailable", coverage="none")
         with self.state_lock:
-            if key in self.cancelled:
+            if key in self.cancelled or (self.approval_scope is not None and self.client_disconnected.is_set()):
                 return
         # Only fixed enum/number fields go to stderr; never log bodies, identifiers,
         # descriptions, upstream exception strings or attacker-supplied metadata.
@@ -397,14 +455,23 @@ class Proxy:
         # A subprocess's stderr may be surfaced by a host. Suppress it rather than
         # accidentally creating an uninspected output path.
         child = subprocess.Popen(self.command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=self.process_group)
+        if self.approval_scope is not None:
+            from .guard_transport import BoundedWriter
+            child.stdin = BoundedWriter(child.stdin)
+            stdout = ClientWriter(stdout)
         readers = []
         for stream, source in ((stdin, "client"), (child.stdout, "server")):
             reader = threading.Thread(target=self._reader, args=(stream, source), daemon=True)
             readers.append(reader); reader.start()
         try:
             while True:
+                if self.stop.is_set():
+                    return 2
                 if self.client_disconnected.is_set():
                     self.awaiting.clear()
+                    self._release_approval()
+                    if self.approval_scope is not None:
+                        return 0
                 else:
                     self._expire_approvals(stdout)
                 if self.client_eof and not self.pending:
@@ -428,7 +495,11 @@ class Proxy:
                     self._client(raw, child, stdout)
                 else:
                     self._server(raw, child, stdout)
+        except ClientDisconnected:
+            self.client_disconnected.set()
+            return 0
         except (ValueError, UnicodeError, RecursionError, OSError, TimeoutError, subprocess.TimeoutExpired):
+            if self.approval_scope is not None: self.approval_scope.revoke()
             for req in [*self.pending.values(), *({"id": a.call_id} for a in self.awaiting.values())]:
                 try:
                     self._write(stdout, error(req["id"], "Guarded connection failed; no further responses were released."))
@@ -438,6 +509,7 @@ class Proxy:
             return 2
         finally:
             self.awaiting.clear()
+            self._release_approval()
             self.stop.set()
             for reader in readers: reader.join(timeout=.3)
             if self.process_group:

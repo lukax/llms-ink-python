@@ -234,6 +234,7 @@ class ModernProxy(Proxy):
         responses = params.get('inputResponses')
         if encoded(action) != continuation.params or type(responses) is not dict or set(responses) != {'approval'}:
             self.awaiting.pop(id_key(continuation.form_id), None)
+            self._release_approval()
             self._forget(internal)
             self._reject(external, 'Approval continuation did not match the complete reviewed action. No call was sent.')
             return

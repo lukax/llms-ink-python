@@ -26,6 +26,9 @@ func run() error {
 			return &mcp.ElicitResult{Action: "decline"}, nil
 		}})
 	cmd := exec.Command(os.Args[1], "-m", "llms_ink.guard", "gateway", "--config", os.Args[2], "--client-protocol", "2026-07-28")
+	if len(os.Args) == 4 && os.Args[3] == "session" {
+		cmd = exec.Command(os.Args[1], "-m", "llms_ink.guard", "connect", "--session-file", os.Args[2])
+	}
 	session, err := client.Connect(ctx, &mcp.CommandTransport{Command: cmd}, &mcp.ClientSessionOptions{ProtocolVersion: "2026-07-28"})
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
