@@ -243,6 +243,12 @@ def main(argv: list[str] | None = None) -> int:
     doctor.add_argument('--config', required=True)
     doctor.add_argument('--owner-file')
     doctor.add_argument('--json', action='store_true', help='Emit structured diagnostic results without arguments or credentials.')
+    container = commands.add_parser('container-run', help='Run a reviewed offline server in a restricted local Docker container (experimental). This does not grant tool permissions.')
+    if os.name == 'posix':
+        from .guard_container import add_options
+        add_options(container)
+    recovery = commands.add_parser('container-recover', help='Remove inactive owned containers from a private runtime directory; never retries a tool action.')
+    recovery.add_argument('--state-dir', required=True)
     initialize_gateway = commands.add_parser('gateway-init', help='Owner-terminal discovery and initial exact permissions; asks before launching the server.')
     initialize_gateway.add_argument('--server', required=True)
     initialize_gateway.add_argument('--output', required=True)
@@ -290,6 +296,18 @@ def main(argv: list[str] | None = None) -> int:
     startup = [True, False]
     service = None
     try:
+        if args.action in {'container-run', 'container-recover'}:
+            if os.name != 'posix': raise RuntimeError('The offline container runtime requires macOS or Linux.')
+            from . import guard_container
+            try:
+                if args.action == 'container-run':
+                    return guard_container.run(guard_container.normalize(args))
+                report = guard_container.recover(args.state_dir)
+            except guard_container.ContainerError as error:
+                print('llms-ink-guard: ' + error.code, file=sys.stderr)
+                return 2
+            print(json.dumps(report))
+            return 2 if report['unconfirmed'] else 0
         if args.action == 'doctor':
             if os.name != 'posix': raise RuntimeError('Local guard diagnostics require macOS or Linux.')
             from .guard_doctor import diagnose, render

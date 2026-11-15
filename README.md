@@ -383,3 +383,65 @@ Use `llms-ink-guard gateway-init --server NAME --output NEW_FILE -- /absolute/ex
 Run `llms-ink-guard doctor --config FILE` before starting the service. Add `--owner-file FILE` to compare the running service's pinned configuration, or `--json` for structured results. These are read-only local checks: no inference, server startup, downloads or session changes. Passing does not verify host connection, human presence or protection.
 
 [Complete Claude first-session setup](https://llms.ink/guard/start/) includes installation, a synthetic text check, owner review, diagnostics, service startup and the existing JavaScript terminal host.
+
+## Offline container runtime (experimental, 0.13.0)
+
+`container-run` is an optional execution layer for a selected stdio server. Use it inside the reviewed command passed to `gateway-init`, a gateway or the local service. It does not inspect responses or grant tool permissions by itself. Existing host commands keep their current behavior.
+
+Requirements: macOS/Linux, Python 3.11+, a local Docker Unix-socket context, and a reviewed Linux image containing a trusted `/usr/local/bin/python3`. The selected image, daemon ID, profile version, maximum lifetime and complete server command appear in owner review and are bound by the gateway configuration digest. Images with declared volumes are refused. Execution never pulls images.
+
+The fixed `llms-ink-offline-2` profile uses UID/GID 65532, a read-only root filesystem, no host mounts or port publication, no network, no Linux capabilities, no-new-privileges, private namespaces, 32 PIDs, 256 MiB memory, one CPU and bounded temporary storage. The runtime verifies effective Docker settings before starting. A clean Docker client config prevents automatic proxy-credential forwarding. Image-baked environment values remain part of the reviewed image.
+
+A guardian outside the calling process group tracks the container independently of Docker's attach client. It closes the attach stream, removes its owned container and confirms absence. A separate PID-1 deadline inside the container ends the namespace's processes after the configured lifetime, even if the host guardian dies. The child cannot stop this PID-1 process or write its memory under the tested profile. This depends on the trusted interpreter, kernel and daemon; it does not isolate other host applications or defend against a compromised owner account.
+
+### Try the offline example
+
+Review [the Dockerfile and text-statistics server](https://github.com/lukax/llms-ink-python/tree/v0.13.0/examples/offline), then build only that directory as the context. The Dockerfile pins the public Python base by digest. Image preparation is an explicit owner operation and may download that base image.
+
+```sh
+git clone --branch v0.13.0 --depth 1 https://github.com/lukax/llms-ink-python.git
+docker context show
+docker --context YOUR_LOCAL_CONTEXT build -t ink-offline-example ./llms-ink-python/examples/offline
+docker --context YOUR_LOCAL_CONTEXT image inspect ink-offline-example --format '{{.Id}}'
+docker --context YOUR_LOCAL_CONTEXT info --format '{{.ID}}'
+mkdir -m 700 "$HOME/.ink-offline-runtime"
+mkdir -m 700 "$HOME/.ink-offline-permissions"
+printf '%s\n' '{"text":"Hello world."}' > "$HOME/.ink-offline-permissions/arguments.json"
+```
+
+Replace every placeholder below with the reviewed absolute executable path or the exact value returned above. Use the local image **ID**, not its mutable tag. The private runtime directory can contain up to 64 concurrent leases and must stay outside agent access.
+
+```sh
+/absolute/venv/bin/llms-ink-guard gateway-init \
+  --server local --output "$HOME/.ink-offline-permissions/gateway.json" -- \
+  /absolute/venv/bin/llms-ink-guard container-run \
+  --state-dir "$HOME/.ink-offline-runtime" \
+  --docker /absolute/path/to/docker --context YOUR_LOCAL_CONTEXT \
+  --daemon-id YOUR_REVIEWED_DAEMON_ID --image sha256:YOUR_LOCAL_IMAGE_ID \
+  --profile llms-ink-offline-2 --seconds 300 -- \
+  /usr/local/bin/python3 -I -S /app/server.py
+```
+
+Approve discovery, select `text_stats`, enter the absolute `arguments.json` path, then review and save the exact permission. Start a new service with that file:
+
+```sh
+llms-ink-guard service-init "$HOME/.ink-offline-service"
+llms-ink-guard service-serve --owner-file "$HOME/.ink-offline-service/owner.json" \
+  --config "$HOME/.ink-offline-permissions/gateway.json"
+```
+
+Use the existing [Claude host setup](https://llms.ink/guard/start/) with this new owner-file path and the Python environment containing 0.13.0. The example request is `local__text_stats` with `{"text":"Hello world."}`. It returns 12 characters, 2 words and 1 line. A different text needs its own reviewed exact permission. Per-call approval remains required.
+
+The five-minute deadline is fixed at process start; it does not renew on tool calls. Expiry closes that connection. Start a fresh reviewed connection when needed, without replaying an action whose outcome is uncertain. EOF on the runtime's stdin closes the connection, including a server that ignores EOF. Keep stdin open while awaiting MCP responses.
+
+### Recovery and limits
+
+```sh
+llms-ink-guard container-recover --state-dir "$HOME/.ink-offline-runtime"
+```
+
+The report lists removed lease IDs, active guardian leases and unconfirmed cleanup. Recovery skips active owners, checks the recorded daemon and container identity, and only then removes resources. It does not restart a server or replay a call. Unknown outcomes prevent new launches from that state directory. A changed daemon must be reconciled by the owner; the runtime does not silently adopt it.
+
+If container creation lost its reply and no matching object is visible, cleanup stays `container_creation_unconfirmed`: an absence query cannot prove that an in-flight create will never finish. Keep the record and retry recovery after the daemon operation settles. This release does not automatically resolve an indefinitely ambiguous creation. A record may also remain after the deadline has stopped all processes; stopping execution and removing its record are separate operations. Do not delete the runtime directory to hide an unresolved lease.
+
+The deadline cannot run while the container/VM is paused, and kernel scheduling can delay its observation. The Docker daemon, Docker CLI, host code, image/interpreter and kernel remain trusted. This is an offline profile: networked MCP servers, credentials, workspace mounts and remote Docker endpoints are not supported. `doctor` does not execute or verify the container runtime. These lifecycle checks do not establish prompt-injection accuracy, usability or whole-agent protection.

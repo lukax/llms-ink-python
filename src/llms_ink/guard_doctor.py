@@ -62,7 +62,7 @@ def diagnose(config_path, owner_file=None):
             'coverage': {'scope': 'Configured legacy stdio MCP tools routed through a gateway or service only.',
                          'hostConnection': 'not_verified', 'claudeAuthentication': 'not_verified',
                          'nativeHostTools': 'not_covered', 'directRemoteHttpTransport': 'not_supported',
-                         'processOrNetworkIsolation': 'not_provided',
+                         'processOrNetworkIsolation': 'not_verified',
                          'toolDefinitionsAndModelExecution': 'not_executed',
                          'note': 'Passing these checks does not establish protection or an active guarded conversation.'}}
 
@@ -78,7 +78,7 @@ def render(report):
             names = ', '.join(server['tools']) or '(no tools)'
             lines.append(f"  {server['server']}: {names}; exact calls: {server['exactCalls']}")
     lines.extend(['', 'Host connection and Claude authentication are not verified.',
-                  'Native host tools and process/network isolation are not covered; direct remote HTTP transport is unsupported.',
+                  'Native host tools are not covered. Container isolation is not verified by doctor; direct remote HTTP transport is unsupported.',
                   'No model or server was started. No session was created or revoked.',
                   'Local checks passed; an active guarded conversation is not established.' if report['checksPassed'] else 'Resolve the failed checks before continuing.'])
     return '\n'.join(lines)

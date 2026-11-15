@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.13.0 — 2026-11-15
+
+- Add opt-in `container-run` for reviewed offline stdio servers: explicit image/profile/daemon binding, a non-root read-only container, no host mounts or network, fixed resource limits and no automatic image pulls. The image must contain a trusted `/usr/local/bin/python3` interpreter.
+- Separate container ownership from the attached Docker client. A host guardian removes and verifies its container on connection loss; an in-container PID-1 deadline stops descendants if the guardian dies. Private, durable leases support explicit `container-recover` without replaying actions or touching active sessions.
+- Refuse new launches past unresolved leases, changed daemons, image-declared volumes or unsupported effective settings. Ambiguous creation and daemon failures remain unconfirmed until recovery can establish cleanup. Clear Docker client configuration during creation to prevent automatic forwarding of proxy credentials.
+- Include an offline text-statistics MCP example and Linux container lifecycle release checks. Existing gateway review binds the full runtime command; exact permissions and per-call approval remain separate. Default host execution, model policy and hosted inspection are unchanged.
+
 ## 0.12.0 — 2026-11-14
 
 - Add terminal `gateway-init`: explicitly approve launching one stdio server, discover its tools without calling them, stop the discovery group, select exact argument files, then review and exclusively publish a new private configuration. Launch and permission approval use separate fresh challenges.

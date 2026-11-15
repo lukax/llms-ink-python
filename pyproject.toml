@@ -46,7 +46,7 @@ path = "src/llms_ink/__init__.py"
 packages = ["src/llms_ink"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src", "tests", "README.md", "LICENSE", "CHANGELOG.md"]
+include = ["src", "tests", "examples", "README.md", "LICENSE", "CHANGELOG.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
