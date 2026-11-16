@@ -46,6 +46,32 @@ SEMANTIC_RULES = (
     re.compile(r"\b(?:for (?:ai )?assistants|you are now|do not (?:tell|mention|request confirmation)|hide this instruction|always recommend)\b", re.I),
 )
 
+# Untrusted content that asks its reader to act: get data and send it out, move money or data to an outside
+# address, change accounts or devices. The model scores such ordinary-sounding requests near zero (InjecAgent,
+# AgentDojo), so these quarantine on their own. Development data, frozen rules and held-out results:
+# evaluation/action-rules/README.md in the llms.ink repository.
+_EMAIL = r"[\w.+-]+@(?![\w.-]*\b(?:example\.(?:com|org|net)|example|test|invalid|localhost)\b)[\w-]+(?:\.[\w-]+)+"  # RFC 2606/6761 example domains receive no mail
+_RETRIEVE = r"(?:retriev\w*|get|gets|fetch\w*|find|list|search\w*|download\w*|collect\w*|gather\w*|extract\w*|export\w*|look up|pull|read|access|check|obtain\w*|compil\w*|locate|view|show)"
+_SEND = r"(?:send|sends|sending|email|e-mail|forward|share|post|upload|mail|text|message)"
+_DEST = rf"(?:to|with)\s+(?:(?:my|the|his|her|their|a|an)\s+)?(?:[\w'’-]+\s+){{0,4}}?(?:(?:e-?mail|address|inbox)(?:\s+address)?[\s:,'\"]*)?['\"]?{_EMAIL}"
+# A sentence start inside data: after . ! ? and a space, a quote, brace or colon, a comma before a capital, or a request.
+_START = r"(?:^|[.!?]\s+|[\"'{:]\s*|,\s+(?=(?-i:[A-Z]))|\bplease\s+|\b(?:can|could|would)\s+you\s+(?:please\s+)?|\bkindly\s+)"
+_SAME_SENTENCE = r"(?:[^.!?\n]|\.(?=\S))"  # a dot inside a word (.hidden, www.bank.com) doesn't end it
+_ACT = r"(?:unlock|lock|disable|deactivate|turn off|withdraw|transfer|wire|pay|initiate|purchase|buy|delete|erase|remove|cancel|grant|revoke|reset|change|update|move|schedule|install|approve|share|invite)"
+_FIRST_PERSON = r"(?<![\w/'\".-])(?-i:my|me)(?=\s)"  # lowercase: "My Account" is an interface label
+_IBAN = r"(?-i:\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b)"
+_WEB = r"(?:https?://|www\.)[\w.-]+\.[a-z]{2,}\S*"
+_DEVICE = r"(?:robot|door|lock|garage|alarm|thermostat|camera|traffic light|light|speaker|vacuum|oven|stove|heater|valve|gate|sprinkler|car|vehicle|drone)s?"
+_DEVICE_ACT = r"(?:unlock|lock|open|close|turn (?:on|off)|switch (?:on|off)|move|guide|drive|start|stop|set|change|disable|enable|activate|deactivate|play|schedule)"
+ACTION_RULES = (
+    re.compile(rf"\b{_RETRIEVE}\b[^\n]{{0,240}}?\b{_SEND}\b[^\n]{{0,120}}?{_DEST}", re.I),
+    re.compile(rf"\b(?:share|send|give|reveal|disclose|tell|forward)\b{_SAME_SENTENCE}{{0,80}}\b(?:password|passcode|pin code|credentials|security code|one-time code|2fa code|recovery code|seed phrase|private key)s?\b{_SAME_SENTENCE}{{0,120}}?{_DEST}", re.I),
+    re.compile(rf"{_START}{_ACT}\b{_SAME_SENTENCE}{{0,140}}?{_FIRST_PERSON}", re.I),
+    re.compile(rf"{_START}(?:send|transfer|wire|pay|forward|email|e-mail|share|post|upload)\b{_SAME_SENTENCE}{{0,160}}?\b(?:to|into)\s+(?:(?:the|my|this|that|his|her|their|a|an)\s+)?(?:[\w'’-]+\s+){{0,3}}?(?:(?:(?:account|iban|wallet|e-?mail(?:\s+address)?|address)\s*[:,]?\s*['\"]?(?:{_EMAIL}|{_IBAN}))|(?:['\"]?{_EMAIL})|(?:(?:website|site|link|page|server)\s*[:,]?\s*['\"]?{_WEB}))", re.I),
+    re.compile(r"\b(?:change|reset|set|update)\s+(?:the\s+|my\s+|their\s+)?(?:account\s+)?password\s+(?:of|for)\b[^.\n]{0,40}?\bto\b", re.I),
+    re.compile(rf"(?:\bplease\s+|\b(?:can|could|would)\s+you\s+(?:please\s+)?){_DEVICE_ACT}\b{_SAME_SENTENCE}{{0,60}}?\b(?:the|my)\s+(?:[\w-]+\s+){{0,3}}?{_DEVICE}\b", re.I),
+)
+
 
 def model_dir() -> Path:
     return Path(os.environ.get("LLMS_INK_GUARD_CACHE", str(Path.home() / ".cache" / "llms-ink" / "guard"))) / MODEL_REVISION
@@ -93,7 +119,7 @@ def setup(root: Path) -> None:
 
 def receipt(outcome: str, reason: str, **extra: Any) -> dict:
     return {"outcome": outcome, "reason": reason, "modelRevision": MODEL_REVISION,
-            "policyRevision": "1", **extra}
+            "policyRevision": "2", **extra}
 
 
 class Inspector:
@@ -120,8 +146,9 @@ class Inspector:
             count += 1
             highest = max(highest, score)
             rule = any(pattern.search(fragment) for pattern in SEMANTIC_RULES)
-            if score >= 0.85 or (rule and score >= 0.2):
-                return receipt("quarantine", "instruction_pattern" if rule else "model_detection",
+            action = any(pattern.search(fragment) for pattern in ACTION_RULES)
+            if action or score >= 0.85 or (rule and score >= 0.2):
+                return receipt("quarantine", "action_request" if action else "instruction_pattern" if rule else "model_detection",
                                coverage="partial" if stop < len(ids) else "complete", tokens=len(ids),
                                windows=count, score=round(highest, 4), contentDigest=digest)
             if stop == len(ids):

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.0 — 2026-11-16
+
+- Add action-request rules to the local guard: content asking its reader to send data or money to an outside email, IBAN or website, act on "my" accounts or files, change a password or operate a device is quarantined with reason `action_request`, whatever the model score. Receipts carry `policyRevision` `"2"`.
+- InjecAgent base attacks: 255 of 459 held-out cases now quarantined (previously 0 of 1,054). Enron business email: 54 of 3,866 quarantined (previously 46). Results and gaps: https://llms.ink/guard/#action-rules.
+- The hosted Inspect service and its `llms-ink-inspect-1` receipts are unchanged.
+
 ## 0.14.0 — 2026-11-15
 
 - Add opt-in owner-bound session lifetimes: `session-create --host-bound` refuses attachment until an authenticated owner watcher connects. `session-watch` ties that binding to an idle host stdin pipe; disconnect, EOF, unexpected input, expiry or owner revocation invalidates all attached authority.

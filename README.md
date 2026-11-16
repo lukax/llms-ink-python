@@ -166,6 +166,10 @@ mode sandboxes the server or covers other connections and native host tools.
 or unavailable. An allow decision is not proof of safety. The model is English-centric; this pilot has not met
 large held-out-corpus or agent-task evaluation gates. Reproducible authored smoke cases live in
 `tests/fixtures/guard_eval.json`; after setup, run `python tests/evaluate_guard.py` to compare rules and hybrid outcomes.
+Since 0.15.0, requests to send data or money to an outside address, act on the reader's accounts, change a password or
+operate a device are quarantined as `action_request` regardless of the model score. They catch 255 of 459 held-out
+InjecAgent attacks and also quarantine about 0.2% of ordinary business email; see the
+[evaluation](https://llms.ink/guard/#action-rules).
 
 The first setup downloads about 96 MB. Files are verified against pinned SHA-256 hashes at install and startup.
 No scanning API receives content; upstream MCP servers still receive requests. Override the local cache location
