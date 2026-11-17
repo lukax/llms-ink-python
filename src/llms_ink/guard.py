@@ -119,7 +119,42 @@ def setup(root: Path) -> None:
 
 def receipt(outcome: str, reason: str, **extra: Any) -> dict:
     return {"outcome": outcome, "reason": reason, "modelRevision": MODEL_REVISION,
-            "policyRevision": "2", **extra}
+            "policyRevision": "3", **extra}
+
+
+def _invisible(cp: int) -> bool:
+    """Characters a reader doesn't see: direction controls, zero-width characters, fillers (src/lib/invisible.ts)."""
+    return (cp in (0x200e, 0x200f, 0x061c, 0xfeff, 0x00ad, 0x034f, 0x17b4, 0x17b5, 0x115f, 0x1160, 0x3164, 0xffa0)
+            or 0x202a <= cp <= 0x202e or 0x2066 <= cp <= 0x2069 or 0x200b <= cp <= 0x200d
+            or 0x2060 <= cp <= 0x2064 or 0x206a <= cp <= 0x206f or 0x180b <= cp <= 0x180e)
+
+
+def _selector_byte(cp: int) -> int | None:
+    return cp - 0xfe00 if 0xfe00 <= cp <= 0xfe0f else cp - 0xe0100 + 16 if 0xe0100 <= cp <= 0xe01ef else None
+
+
+def scan_text(text: str) -> str:
+    """The text the guard scans: tag characters read as the ASCII they encode, runs of variation selectors read as
+    the UTF-8 bytes they encode, and other invisible characters removed, so hidden or split instructions reach the
+    rules and the model. The receipt digest still covers the original text."""
+    out: list[str] = []
+    cps = [ord(c) for c in text]
+    i = 0
+    while i < len(cps):
+        cp = cps[i]
+        if 0xe0000 <= cp <= 0xe007f:
+            out.append(chr(cp - 0xe0000) if 0xe0020 <= cp <= 0xe007e else "")
+        elif _selector_byte(cp) is not None:
+            end = i
+            while end + 1 < len(cps) and _selector_byte(cps[end + 1]) is not None:
+                end += 1
+            if end > i:
+                out.append(" " + bytes(_selector_byte(c) for c in cps[i:end + 1]).decode("utf-8", "replace") + " ")
+            i = end
+        elif not _invisible(cp):
+            out.append(chr(cp))
+        i += 1
+    return "".join(out)
 
 
 class Inspector:
@@ -132,6 +167,7 @@ class Inspector:
         digest = hashlib.sha256(encoded).hexdigest()
         if len(encoded) > MAX_BYTES:
             return receipt("unscanned", "byte_limit", coverage="none", contentDigest=digest)
+        text = scan_text(text)
         encoding = self.tokenizer.encode(text, add_special_tokens=False)
         ids, offsets = encoding.ids, encoding.offsets
         if len(ids) > MAX_TOKENS:

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.16.0 — 2026-11-17
+
+- The local guard scans what hidden text says: Unicode tag characters are read as the ASCII they encode, runs of variation selectors as the UTF-8 bytes they encode, and zero-width characters, direction controls and fillers are removed before the rules and the model run. Instructions hidden in or split by invisible characters no longer bypass them. Receipts carry `policyRevision` `"3"`; `contentDigest` still covers the original text.
+- The hosted Inspect service and its `llms-ink-inspect-1` receipts are unchanged.
+
 ## 0.15.0 — 2026-11-16
 
 - Add action-request rules to the local guard: content asking its reader to send data or money to an outside email, IBAN or website, act on "my" accounts or files, change a password or operate a device is quarantined with reason `action_request`, whatever the model score. Receipts carry `policyRevision` `"2"`.
